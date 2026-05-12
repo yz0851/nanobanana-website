@@ -750,7 +750,7 @@ const PromptViewer = memo(({ prompt, onSubmissionAction, orientation = 'landscap
 });
 
 // --- 7. 管理员待审核界面组件 ---
-const PendingSubmissionsPanel = ({ sections, onApprove, onReject, onEdit, onViewSubmission, refreshKey }) => {
+const PendingSubmissionsPanel = ({ sections, onApprove, onReject, onEdit, onViewSubmission, refreshKey, listAction }) => {
   const [submissions, setSubmissions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -768,6 +768,13 @@ const PendingSubmissionsPanel = ({ sections, onApprove, onReject, onEdit, onView
   useEffect(() => {
     loadSubmissions();
   }, [refreshKey]);
+
+  useEffect(() => {
+    if (!listAction) return;
+    if (listAction.type === 'remove') {
+      setSubmissions(prev => prev.filter(sub => sub.id !== listAction.id));
+    }
+  }, [listAction]);
 
   if (isLoading) {
     return (
@@ -981,6 +988,7 @@ export default function App() {
   const [viewingSubmission, setViewingSubmission] = useState(null);
   const [selectedSection, setSelectedSection] = useState(null);
   const [pendingRefreshKey, setPendingRefreshKey] = useState(0);
+  const [pendingListAction, setPendingListAction] = useState(null);
   const [reviewImageUrlInput, setReviewImageUrlInput] = useState('');
   const [isReviewImageUploading, setIsReviewImageUploading] = useState(false);
   const [isReviewImageDragOver, setIsReviewImageDragOver] = useState(false);
@@ -1575,19 +1583,27 @@ export default function App() {
     handleApproveSubmission(submission, sectionId);
     setViewingSubmission(null);
     setSelectedSection(null);
-    setPendingRefreshKey(prev => prev + 1);
+    setPendingListAction({ type: 'remove', id: submission.id, at: Date.now() });
   }, [handleApproveSubmission]);
 
   // 🔴 处理拒绝投稿
-  const handleRejectSubmission = useCallback(async (submissionId) => {
+  const handleRejectSubmission = useCallback(async (submission) => {
     if (!confirm("确定拒绝此投稿？")) return;
+    const submissionId = typeof submission === 'string' ? submission : submission.id;
     const result = await setSubmissionStatus(submissionId, 'rejected');
     if (!result.success) {
       alert("❌ 更新投稿状态失败: " + (result.error || "未知错误"));
       return;
     }
     setViewingSubmission(null);
-    setPendingRefreshKey(prev => prev + 1);
+    setPendingListAction({ type: 'remove', id: submissionId, at: Date.now() });
+    if (submission && typeof submission === 'object') {
+      setRejectedSubmissions(prev => [{
+        ...submission,
+        status: 'rejected',
+        processedAt: new Date().toISOString()
+      }, ...prev.filter(item => item.id !== submissionId)]);
+    }
   }, []);
 
   const handleRestoreRejectedSubmission = useCallback(async (submissionId) => {
@@ -2265,6 +2281,7 @@ export default function App() {
                   onEdit={handleEditSubmission}
                   onViewSubmission={setViewingSubmission}
                   refreshKey={pendingRefreshKey}
+                  listAction={pendingListAction}
                 />
               </div>
             )}
@@ -2574,7 +2591,7 @@ export default function App() {
                   <CheckCircle size={16} /> 批准到选中分区
                 </button>
                 <button
-                  onClick={() => handleRejectSubmission(viewingSubmission.id)}
+                  onClick={() => handleRejectSubmission(viewingSubmission)}
                   className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold transition-all text-sm"
                 >
                   <Trash2 size={16} /> 删除

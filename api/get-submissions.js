@@ -1,6 +1,5 @@
-﻿// Vercel Serverless Function - get submissions (with pagination and status filter)
+// Vercel Serverless Function - get submissions
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -15,35 +14,20 @@ export default async function handler(req, res) {
 
   try {
     const statusFilter = (req.query?.status || 'pending').toString();
+    const allowedStatuses = new Set(['pending', 'approved', 'rejected', 'all']);
+    if (!allowedStatuses.has(statusFilter)) {
+      return res.status(400).json({ success: false, error: 'Invalid status filter' });
+    }
+
     const projectId = 'nano-banana-d0fe0';
     const apiKey = 'AIzaSyBxkZhzbilg15YFUHdEix2DrXQLEa4rpoQ';
+    const collection = 'pending_submissions';
 
-    const allDocuments = [];
-    let nextPageToken = '';
+    const documents = statusFilter === 'all'
+      ? await listAllDocuments(projectId, apiKey, collection)
+      : await queryDocumentsByStatus(projectId, apiKey, collection, statusFilter);
 
-    do {
-      const pageTokenQuery = nextPageToken ? `&pageToken=${encodeURIComponent(nextPageToken)}` : '';
-      const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/pending_submissions?key=${apiKey}${pageTokenQuery}`;
-
-      const response = await fetch(firestoreUrl, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Firestore error:', errorText);
-        return res.status(500).json({ success: false, error: `获取投稿失败: ${errorText}` });
-      }
-
-      const result = await response.json();
-      allDocuments.push(...(result.documents || []));
-      nextPageToken = result.nextPageToken || '';
-    } while (nextPageToken);
-
-    const submissions = allDocuments
+    const submissions = documents
       .map((doc) => {
         const docId = doc.name.split('/').pop();
         const fields = doc.fields || {};
@@ -66,7 +50,6 @@ export default async function handler(req, res) {
           processedAt: fields.processedAt?.timestampValue || null
         };
       })
-      .filter((sub) => statusFilter === 'all' ? true : sub.status === statusFilter)
       .sort((a, b) => {
         const aSortTime = a.processedAt || a.createdAt;
         const bSortTime = b.processedAt || b.createdAt;
@@ -82,3 +65,61 @@ export default async function handler(req, res) {
   }
 }
 
+async function listAllDocuments(projectId, apiKey, collection) {
+  const documents = [];
+  let nextPageToken = '';
+
+  do {
+    const pageTokenQuery = nextPageToken ? `&pageToken=${encodeURIComponent(nextPageToken)}` : '';
+    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collection}?key=${apiKey}${pageTokenQuery}`;
+    const response = await fetch(firestoreUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Firestore error:', errorText);
+      throw new Error(`获取投稿失败: ${errorText}`);
+    }
+
+    const result = await response.json();
+    documents.push(...(result.documents || []));
+    nextPageToken = result.nextPageToken || '';
+  } while (nextPageToken);
+
+  return documents;
+}
+
+async function queryDocumentsByStatus(projectId, apiKey, collection, status) {
+  const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:runQuery?key=${apiKey}`;
+  const response = await fetch(firestoreUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId: collection }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'status' },
+            op: 'EQUAL',
+            value: { stringValue: status }
+          }
+        }
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Firestore error:', errorText);
+    throw new Error(`获取投稿失败: ${errorText}`);
+  }
+
+  const result = await response.json();
+  return result.map((item) => item.document).filter(Boolean);
+}
