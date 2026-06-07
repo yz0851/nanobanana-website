@@ -3,7 +3,7 @@
     {
       "id": "demo",
       "title": "SFW",
-      "isCollapsed": false,
+      "isCollapsed": true,
       "prompts": [
         {
           "id": "u-1780771677510",
@@ -17536,6 +17536,6 @@
     "真人",
     "通用"
   ],
-  "siteNotes": "欢迎来到大香蕉提示词收纳盒！\n\n虽然这个网站已经开了一阵子了，但是我还是要说明一下这个网站是提供提示词的，没有生图能力，如果想玩香蕉建议自寻途径\n每次审核投稿都有人发张图片想让AI帮他生成是何意味啊（\n\n以防你不知道，最近出了个新生图模型Riverflow\n目前体感是二次元生图最强，比大香蕉和img2都强\n缺点是知识库比不过这两位，而且甲比较厚\n以防你不知道，这个模型openrouter上限免到6月9号：https://openrouter.ai/sourceful/riverflow-v2.5-pro:free\n\n如果你喜欢本网站，可以给我的github项目打个星_(:з」∠)_\nhttps://github.com/unknowlei/nanobanana-website",
-  "lastUpdated": "2026-06-06T18:52:28.054Z"
+  "siteNotes": "欢迎来到大香蕉提示词收纳盒！\n\n虽然这个网站已经开了一阵子了，但是我还是要说明一下这个网站是提供提示词的，没有生图能力，如果想玩香蕉建议自寻途径\n每次审核投稿都有人发张图片想让AI帮他生成是何意味啊（\n\n如果你喜欢本网站，可以给我的github项目打个星_(:з」∠)_\nhttps://github.com/unknowlei/nanobanana-website",
+  "lastUpdated": "2026-06-07T08:53:00.694Z"
 }
