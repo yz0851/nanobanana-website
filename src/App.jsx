@@ -220,6 +220,35 @@ const getOptimizedUrl = (url, width = 400) => {
   return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=${width}&q=90&output=webp`;
 };
 
+const normalizePromptData = (sections = []) => {
+  const cleanPrompt = (prompt) => ({
+    ...prompt,
+    tags: Array.isArray(prompt.tags) ? prompt.tags : [],
+    images: (Array.isArray(prompt.images) ? prompt.images : (prompt.image ? [prompt.image] : [])).filter(url => typeof url === 'string' && url.length < 5000)
+  });
+
+  const hasSfwRealSection = sections.some(section => section.id === 'sfw-real' || section.title === 'SFW真人');
+
+  return sections.flatMap((section) => {
+    const cleanSection = {
+      ...section,
+      isCollapsed: (section.isRestricted || section.defaultCollapsed) ? true : section.isCollapsed,
+      prompts: (section.prompts || []).map(cleanPrompt)
+    };
+
+    if (section.title !== 'SFW' || hasSfwRealSection) {
+      return [cleanSection];
+    }
+
+    const realPrompts = cleanSection.prompts.filter(prompt => prompt.tags.includes('真人'));
+    const animePrompts = cleanSection.prompts.filter(prompt => !prompt.tags.includes('真人'));
+    return [
+      { ...cleanSection, title: 'SFW动漫', prompts: animePrompts },
+      { ...cleanSection, id: 'sfw-real', title: 'SFW真人', prompts: realPrompts }
+    ];
+  });
+};
+
 const AnimationStyles = () => (
   <style>{`
     .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -501,7 +530,7 @@ const SubmissionModal = ({ onClose, commonTags = [], mode = 'create', initialDat
 };
 
 // --- 5. 提示词卡片 ---
-const PromptCard = memo(({ prompt, isAdmin, draggedItem, dragOverTarget, handleDragStart, handleDragEnd, handleDragOver, handleDragEnter, handleDrop, onClick, isFavorite, onToggleFavorite, isNew, isSelected = false, onToggleSelect = null }) => {
+const PromptCard = memo(({ prompt, isAdmin, draggedItem, dragOverTarget, handleDragStart, handleDragEnd, handleDragOver, handleDragEnter, handleDrop, onClick, isFavorite, onToggleFavorite, isNew, isSelected = false, onToggleSelect = null, onBlacklist = null, isBlacklistArmed = false }) => {
   const tags = Array.isArray(prompt.tags) ? prompt.tags : [];
   const images = Array.isArray(prompt.images) && prompt.images.length > 0 ? prompt.images : (prompt.image ? [prompt.image] : []);
   const [currentImgIdx, setCurrentImgIdx] = useState(0);
@@ -568,8 +597,19 @@ const PromptCard = memo(({ prompt, isAdmin, draggedItem, dragOverTarget, handleD
         <div className="flex gap-1 overflow-hidden opacity-70 group-hover:opacity-100 transition-opacity">{tags.slice(0, 2).map(t => (typeof t === 'string' ? <span key={t} className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{t}</span> : null))}</div>
       </div>
       
-      {isNew && <div className="absolute bottom-4 right-12 z-20 bg-green-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm animate-pulse pointer-events-none select-none">NEW</div>}
+      {isNew && <div className="absolute bottom-4 left-3 z-20 bg-green-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm animate-pulse pointer-events-none select-none">NEW</div>}
 
+      {onBlacklist && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onBlacklist(prompt); }}
+          className={`absolute bottom-3 right-12 p-2 rounded-full z-20 transition-all active:scale-90 hover:bg-slate-100 ${
+            isBlacklistArmed ? 'text-rose-500 bg-rose-50 ring-2 ring-rose-200' : 'text-slate-300 bg-white/80'
+          }`}
+          title={isBlacklistArmed ? "再次点击拉黑" : "拉黑"}
+        >
+          <EyeOff size={16} />
+        </button>
+      )}
       <button onClick={(e) => { e.stopPropagation(); onToggleFavorite(prompt); }} className={`absolute bottom-3 right-3 p-2 rounded-full z-20 transition-all active:scale-90 hover:bg-slate-100 ${isFavorite ? 'text-pink-500 bg-pink-50' : 'text-slate-300 bg-white/80'}`} title={isFavorite ? "取消收藏" : "收藏"}><Heart size={16} fill={isFavorite ? "currentColor" : "none"} className={isFavorite ? "animate-pulse-once" : ""} /></button>
     </div>
   );
@@ -763,7 +803,7 @@ const PromptViewer = memo(({ prompt, onSubmissionAction, orientation = 'landscap
 });
 
 // --- 7. 管理员待审核界面组件 ---
-const PendingSubmissionsPanel = ({ sections, onApprove, onReject, onEdit, onViewSubmission, refreshKey, listAction, stagedApprovals = {}, onSubmitApprovedBatch, isSubmittingBatch = false }) => {
+const PendingSubmissionsPanel = ({ sections, onApprove, onReject, onEdit, onViewSubmission, refreshKey, listAction, stagedApprovals = {}, onSubmitApprovedBatch, onUnstageApproval, isSubmittingBatch = false }) => {
   const [submissions, setSubmissions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -843,9 +883,13 @@ const PendingSubmissionsPanel = ({ sections, onApprove, onReject, onEdit, onView
               }`}
             >
               {stagedApprovals[sub.id] && (
-                <div className="absolute top-2 left-2 z-20 w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onUnstageApproval(sub.id); }}
+                  className="absolute top-2 left-2 z-20 w-8 h-8 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-lg transition-colors"
+                  title="取消暂存"
+                >
                   <Check size={18} />
-                </div>
+                </button>
               )}
               <div className="aspect-square bg-gradient-to-br from-slate-50 to-slate-100 relative overflow-hidden">
                 {sub.images && sub.images.length > 0 ? (
@@ -1048,6 +1092,18 @@ export default function App() {
   // 🟢 移动提示词弹窗状态
   const [moveModalData, setMoveModalData] = useState(null); // { prompt, currentSectionId }
   const [selectedPromptIds, setSelectedPromptIds] = useState(() => new Set());
+  const [blacklistedPromptIds, setBlacklistedPromptIds] = useState(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem('nanobanana_blacklist') || '[]'));
+    } catch {
+      return new Set();
+    }
+  });
+  const [blacklistConfirmPrompt, setBlacklistConfirmPrompt] = useState(null);
+  const [blacklistConfirmOptOut, setBlacklistConfirmOptOut] = useState(false);
+  const [suppressBlacklistConfirm, setSuppressBlacklistConfirm] = useState(() => localStorage.getItem('nanobanana_blacklist_no_confirm') === 'true');
+  const [armedBlacklistPromptId, setArmedBlacklistPromptId] = useState(null);
+  const blacklistArmTimerRef = useRef(null);
   
   // 🟢 回顶按钮状态
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -1097,6 +1153,20 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('nanobanana_new_show_nsfw', showNsfwInNew ? 'true' : 'false');
   }, [showNsfwInNew]);
+
+  useEffect(() => {
+    localStorage.setItem('nanobanana_blacklist', JSON.stringify(Array.from(blacklistedPromptIds)));
+  }, [blacklistedPromptIds]);
+
+  useEffect(() => {
+    localStorage.setItem('nanobanana_blacklist_no_confirm', suppressBlacklistConfirm ? 'true' : 'false');
+  }, [suppressBlacklistConfirm]);
+
+  useEffect(() => {
+    return () => {
+      if (blacklistArmTimerRef.current) clearTimeout(blacklistArmTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('nanobanana_last_visit', Date.now().toString());
@@ -1204,8 +1274,9 @@ export default function App() {
     const localFavorites = localStorage.getItem('nanobanana_favorites');
     if (localSections) { 
         const parsed = JSON.parse(localSections);
-        const initializedSections = parsed.map(s => ({ ...s, isCollapsed: (s.isRestricted || s.defaultCollapsed) ? true : s.isCollapsed }));
+        const initializedSections = normalizePromptData(parsed);
         setSections(initializedSections); 
+        localStorage.setItem('nanobanana_sections', JSON.stringify(initializedSections));
         if (localTags) setCommonTags(JSON.parse(localTags)); 
         if (localNotes) setSiteNotes(JSON.parse(localNotes)); 
     } else if (DATA_SOURCE_URL && DATA_SOURCE_URL.includes("http")) fetchCloudData(false); 
@@ -1721,6 +1792,17 @@ export default function App() {
     setSelectedSection(null);
   }, []);
 
+  const handleUnstageApproval = useCallback((submissionId) => {
+    setStagedApprovals(prev => {
+      const next = { ...prev };
+      delete next[submissionId];
+      return next;
+    });
+    if (viewingSubmission?.id === submissionId) {
+      setSelectedSection(null);
+    }
+  }, [viewingSubmission]);
+
   const handleSubmitApprovalBatch = useCallback(async () => {
     const items = Object.values(stagedApprovals);
     if (items.length === 0) return;
@@ -1946,15 +2028,7 @@ export default function App() {
       const res = await fetch(`${DATA_SOURCE_URL}?t=${new Date().getTime()}`);
       if (!res.ok) throw new Error();
       const d = await res.json();
-      const cleanSections = (d.sections || []).map(s => ({
-        ...s,
-        isCollapsed: (s.isRestricted || s.defaultCollapsed) ? true : s.isCollapsed,
-        prompts: s.prompts.map(p => ({
-          ...p,
-          tags: Array.isArray(p.tags) ? p.tags : [],
-          images: (Array.isArray(p.images) ? p.images : (p.image ? [p.image] : [])).filter(url => url.length < 5000)
-        }))
-      }));
+      const cleanSections = normalizePromptData(d.sections || []);
 
       setSections(cleanSections);
       setCommonTags(d.commonTags || []);
@@ -2099,6 +2173,50 @@ export default function App() {
   const confirmRestrictedOpen = () => { if (pendingRestrictedSectionId) { setSections(prev => prev.map(s => s.id === pendingRestrictedSectionId ? { ...s, isCollapsed: false } : s)); setPendingRestrictedSectionId(null); } };
   const toggleFavorite = (prompt) => { setFavorites(prev => { const exists = prev.find(p => p.id === prompt.id); if (exists) return prev.filter(p => p.id !== prompt.id); return [prompt, ...prev]; }); if (!isSidebarOpen) setIsSidebarOpen(true); };
   const isFavorite = (promptId) => favorites.some(f => f.id === promptId);
+  const addToBlacklist = useCallback((prompt) => {
+    if (!prompt?.id) return;
+    setBlacklistedPromptIds(prev => new Set([...prev, prompt.id]));
+    setFavorites(prev => prev.filter(item => item.id !== prompt.id));
+    setSelectedPromptIds(prev => {
+      const next = new Set(prev);
+      next.delete(prompt.id);
+      return next;
+    });
+    if (editingPrompt?.id === prompt.id) {
+      setIsPromptModalOpen(false);
+      setEditingPrompt(null);
+      setIsViewingFavorite(false);
+      setIsLocalEditing(false);
+    }
+  }, [editingPrompt]);
+
+  const handleBlacklistClick = useCallback((prompt) => {
+    if (!prompt?.id) return;
+    if (armedBlacklistPromptId !== prompt.id) {
+      setArmedBlacklistPromptId(prompt.id);
+      if (blacklistArmTimerRef.current) clearTimeout(blacklistArmTimerRef.current);
+      blacklistArmTimerRef.current = setTimeout(() => setArmedBlacklistPromptId(null), 2500);
+      return;
+    }
+
+    setArmedBlacklistPromptId(null);
+    if (blacklistArmTimerRef.current) clearTimeout(blacklistArmTimerRef.current);
+    if (suppressBlacklistConfirm) {
+      addToBlacklist(prompt);
+      return;
+    }
+    setBlacklistConfirmPrompt(prompt);
+    setBlacklistConfirmOptOut(false);
+  }, [armedBlacklistPromptId, suppressBlacklistConfirm, addToBlacklist]);
+
+  const confirmBlacklistPrompt = useCallback(() => {
+    if (!blacklistConfirmPrompt) return;
+    if (blacklistConfirmOptOut) setSuppressBlacklistConfirm(true);
+    addToBlacklist(blacklistConfirmPrompt);
+    setBlacklistConfirmPrompt(null);
+    setBlacklistConfirmOptOut(false);
+  }, [blacklistConfirmPrompt, blacklistConfirmOptOut, addToBlacklist]);
+
   const isNewItem = useCallback((id) => { if (!id || typeof id !== 'string') return false; let timestamp = null; if (/^\d{13}$/.test(id)) { timestamp = parseInt(id, 10); } else if (id.startsWith('imported-')) { const part = id.split('-')[1]; if (/^\d{13}$/.test(part)) timestamp = parseInt(part, 10); } else if (id.startsWith('u-')) { const part = id.split('-')[1]; if (/^\d{13}$/.test(part)) timestamp = parseInt(part, 10); } if (timestamp && timestamp > lastVisit) { return true; } return false; }, [lastVisit]);
   const handleFavoriteDrop = (draggedId, targetId) => { const draggedIndex = favorites.findIndex(f => f.id === draggedId); const targetIndex = favorites.findIndex(f => f.id === targetId); if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) return; const newFavorites = [...favorites]; const [removed] = newFavorites.splice(draggedIndex, 1); newFavorites.splice(targetIndex, 0, removed); setFavorites(newFavorites); };
   const filteredSections = useMemo(() => {
@@ -2106,6 +2224,7 @@ export default function App() {
       .map(section => ({
         ...section,
         prompts: section.prompts.filter(p => {
+          if (blacklistedPromptIds.has(p.id)) return false;
           const q = searchQuery.toLowerCase();
           const tags = Array.isArray(p.tags) ? p.tags : [];
           const titleText = (p.title || '').toLowerCase();
@@ -2129,14 +2248,14 @@ export default function App() {
         })
       }))
       .filter(section => section.prompts.length > 0 || (searchQuery === '' && selectedTags.length === 0));
-  }, [sections, searchQuery, selectedTags, searchMode]);
+  }, [sections, searchQuery, selectedTags, searchMode, blacklistedPromptIds]);
   
   // 🔴 收集所有 NEW 提示词（先完整收集，再按筛选显示）
   const allNewPrompts = useMemo(() => {
     const result = [];
     sections.forEach(section => {
       section.prompts.forEach(prompt => {
-        if (isNewItem(prompt.id)) {
+        if (!blacklistedPromptIds.has(prompt.id) && isNewItem(prompt.id)) {
           result.push({
             ...prompt,
             fromSection: section.title,
@@ -2147,7 +2266,7 @@ export default function App() {
       });
     });
     return result;
-  }, [sections, isNewItem]);
+  }, [sections, isNewItem, blacklistedPromptIds]);
 
   const newPrompts = useMemo(() => {
     return allNewPrompts.filter(prompt => {
@@ -2469,6 +2588,8 @@ export default function App() {
                         onClick={handleCardClick} 
                         isFavorite={isFavorite(prompt.id)} 
                         onToggleFavorite={toggleFavorite} 
+                        onBlacklist={handleBlacklistClick}
+                        isBlacklistArmed={armedBlacklistPromptId === prompt.id}
                         isNew={true}
                       />
                     ))}
@@ -2489,13 +2610,14 @@ export default function App() {
                   listAction={pendingListAction}
                   stagedApprovals={stagedApprovals}
                   onSubmitApprovedBatch={handleSubmitApprovalBatch}
+                  onUnstageApproval={handleUnstageApproval}
                   isSubmittingBatch={isSubmittingApprovalBatch}
                 />
               </div>
             )}
             {filteredSections.map(section => (<div id={`section-${section.id}`} key={section.id} className={`group mb-8 bg-white/70 backdrop-blur-lg rounded-3xl p-6 border transition-all duration-500 ease-out ${dragOverTarget === section.id && draggedItem?.type === 'SECTION' ? 'border-indigo-400 shadow-[0_0_0_4px_rgba(99,102,241,0.1)] scale-[1.01]' : 'border-white/50 shadow-sm hover:shadow-xl hover:bg-white/80'}`} onDragOver={handleDragOver} onDragEnter={(e) => handleDragEnter(e, section.id)} onDrop={(e) => handleDrop(e, section.id, 'SECTION')}><div className="flex justify-between items-center mb-6 select-none"><div className="flex items-center flex-1">{isAdmin && (<div draggable onDragStart={(e) => handleDragStart(e, 'SECTION', section)} onDragEnd={handleDragEnd} className="mr-3 text-slate-300 hover:text-indigo-400 cursor-grab active:cursor-grabbing p-1 transition-colors"><GripVertical size={20} /></div>)}
             <div onClick={() => handleSectionToggle(section)} className="flex items-center cursor-pointer group/title"><div className={`mr-3 p-1.5 rounded-full bg-white shadow-sm text-slate-400 group-hover/title:text-indigo-500 transition-all duration-300 ${section.isCollapsed ? '-rotate-90' : ''}`}><ChevronDown size={14} /></div><h2 className="text-lg font-bold text-slate-800 tracking-tight flex items-center">{section.title} {section.isRestricted && <span className="ml-2 text-[9px] bg-pink-100 text-pink-600 px-1.5 py-0.5 rounded border border-pink-200">重口</span>}</h2><span className="ml-3 bg-slate-100/80 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-inner">{section.prompts.length}</span></div></div>{isAdmin && (<div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">{selectedPromptIds.size > 0 && (<><button onClick={(e) => { e.stopPropagation(); handleBulkMovePrompts(section.id); }} className="text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-2 py-1.5 rounded-lg transition-colors text-xs font-bold flex items-center gap-1"><FolderOutput size={14}/> 移动选中到此分区 ({selectedPromptIds.size})</button><button onClick={(e) => { e.stopPropagation(); clearPromptSelection(); }} className="text-slate-500 bg-slate-50 hover:bg-slate-100 px-2 py-1.5 rounded-lg transition-colors text-xs font-bold">清空选择</button></>)}<button onClick={(e) => { e.stopPropagation(); setEditingSection(section); setIsSectionModalOpen(true); }} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-lg transition-colors"><Edit2 size={14}/></button><button onClick={(e) => { e.stopPropagation(); if(confirm("删除分区?")) setSections(prev => prev.filter(s => s.id !== section.id)); }} className="text-slate-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14}/></button></div>)}</div>{!section.isCollapsed && (<div onDragOver={handleDragOver} onDragEnter={(e) => handleDragEnter(e, section.id)} onDrop={(e) => handleDrop(e, section.id, 'SECTION_AREA')} className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5 min-h-[120px] transition-all rounded-2xl p-2 -m-2 ${dragOverTarget === section.id && draggedItem?.type === 'PROMPT' ? 'bg-indigo-50/50 ring-2 ring-indigo-200 ring-offset-2' : ''}`}>{section.prompts.map(prompt => { if (renderedCount >= visibleCount) return null; renderedCount++; return (
-            <PromptCard key={prompt.id} prompt={prompt} isAdmin={isAdmin} draggedItem={draggedItem} dragOverTarget={dragOverTarget} handleDragStart={(e, type, item) => handleDragStart(e, type, item, section.id)} handleDragEnd={handleDragEnd} handleDragOver={handleDragOver} handleDragEnter={handleDragEnter} handleDrop={(e, targetId, type) => handleDrop(e, targetId, type, section.id)} onClick={handleCardClick} isFavorite={isFavorite(prompt.id)} onToggleFavorite={toggleFavorite} isNew={isNewItem(prompt.id)} isSelected={selectedPromptIds.has(prompt.id)} onToggleSelect={togglePromptSelection}/> 
+            <PromptCard key={prompt.id} prompt={prompt} isAdmin={isAdmin} draggedItem={draggedItem} dragOverTarget={dragOverTarget} handleDragStart={(e, type, item) => handleDragStart(e, type, item, section.id)} handleDragEnd={handleDragEnd} handleDragOver={handleDragOver} handleDragEnter={handleDragEnter} handleDrop={(e, targetId, type) => handleDrop(e, targetId, type, section.id)} onClick={handleCardClick} isFavorite={isFavorite(prompt.id)} onToggleFavorite={toggleFavorite} onBlacklist={handleBlacklistClick} isBlacklistArmed={armedBlacklistPromptId === prompt.id} isNew={isNewItem(prompt.id)} isSelected={selectedPromptIds.has(prompt.id)} onToggleSelect={togglePromptSelection}/> 
             ); })}{section.prompts.length === 0 && (<div className="col-span-full flex flex-col items-center justify-center text-slate-400 text-sm pointer-events-none py-8 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50"><UploadCloud size={32} className="mb-2 opacity-50 text-indigo-300"/><span className="text-slate-400">{isAdmin ? '拖拽提示词到这里' : '空空如也'}</span></div>)}</div>)}</div>))}
             {isAdmin && <button onClick={handleCreateSection} className="w-full py-5 border-2 border-dashed border-slate-300/50 rounded-3xl text-slate-400 hover:text-indigo-500 hover:border-indigo-300 hover:bg-indigo-50/50 flex items-center justify-center gap-2 transition-all duration-300 group mb-8"><div className="p-2 bg-white rounded-full shadow-sm group-hover:scale-110 transition-transform"><FolderPlus size={18}/></div><span className="font-medium">新建一个分区</span></button>}
             {renderedCount >= visibleCount && (<div className="text-center py-8 text-slate-400 text-sm animate-pulse">下滑加载更多...</div>)}
@@ -2805,6 +2927,45 @@ export default function App() {
                   <Trash2 size={16} /> 删除
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {blacklistConfirmPrompt && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in-up">
+          <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl border border-white/50">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center flex-shrink-0">
+                <EyeOff size={20} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-slate-800 text-lg">删除这个提示词？</h3>
+                <p className="text-sm text-slate-500 mt-1 truncate">{blacklistConfirmPrompt.title || '未命名提示词'}</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 mb-4">确认后会从当前浏览器中隐藏该提示词，并从收藏中移除。这个操作不会删除仓库数据。</p>
+            <label className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-100 text-sm text-slate-600 cursor-pointer mb-5">
+              <input
+                type="checkbox"
+                checked={blacklistConfirmOptOut}
+                onChange={(e) => setBlacklistConfirmOptOut(e.target.checked)}
+                className="w-4 h-4 text-rose-500 rounded border-slate-300 focus:ring-rose-500"
+              />
+              今后不再提醒
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => { setBlacklistConfirmPrompt(null); setBlacklistConfirmOptOut(false); }}
+                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold hover:bg-slate-200 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmBlacklistPrompt}
+                className="px-4 py-2 rounded-xl bg-rose-500 text-white text-sm font-bold hover:bg-rose-600 transition-colors"
+              >
+                确认删除
+              </button>
             </div>
           </div>
         </div>
