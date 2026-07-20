@@ -136,16 +136,28 @@ function App() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    fetch('/data.json')
-      .then((res) => res.json())
+    fetch('/api/data')
+      .then((res) => {
+        if (!res.ok) throw new Error('api data failed');
+        return res.json();
+      })
       .then((json) => {
         const normalized = normalizeData(json);
         setData(normalized);
         setActiveSectionId(normalized.sections[0]?.id || '');
       })
       .catch(() => {
-        setData(EMPTY_DATA);
-        setActiveSectionId(EMPTY_DATA.sections[0].id);
+        fetch('/data.json')
+          .then((res) => res.json())
+          .then((json) => {
+            const normalized = normalizeData(json);
+            setData(normalized);
+            setActiveSectionId(normalized.sections[0]?.id || '');
+          })
+          .catch(() => {
+            setData(EMPTY_DATA);
+            setActiveSectionId(EMPTY_DATA.sections[0].id);
+          });
       });
 
     fetch('/api/auth-status')
@@ -344,7 +356,7 @@ function App() {
       body: JSON.stringify(payload),
     });
     const json = await res.json();
-    setStatus(json.success ? '同步成功，Vercel 会自动重新部署' : (json.error || '同步失败'));
+    setStatus(json.success ? '同步成功，刷新网页后会读取 GitHub 最新数据' : (json.error || '同步失败'));
   };
 
   const copyPrompt = async (prompt) => {

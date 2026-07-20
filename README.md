@@ -5,6 +5,7 @@
 - 图片上传到 Catbox
 - 提示词、标签、分区数据保存在 `public/data.json`
 - Vercel 部署
+- 页面通过 `/api/data` 读取 GitHub 最新数据，不强依赖 Vercel 自动重部署
 - 管理员密码控制新增、编辑、删除和同步
 - 免费 `.vercel.app` 域名即可使用
 
