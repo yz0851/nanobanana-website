@@ -1,3 +1,5 @@
+import { requireAdmin } from './_auth.js';
+
 // Vercel Serverless Function - 同步数据到 GitHub
 export default async function handler(req, res) {
   // 只允许 POST 请求
@@ -6,7 +8,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { sections, commonTags, siteNotes } = req.body;
+    if (!requireAdmin(req, res)) return;
+
+    const { sections, commonTags, site, lastUpdated } = req.body;
 
     // 验证数据
     if (!sections || !Array.isArray(sections)) {
@@ -15,8 +19,13 @@ export default async function handler(req, res) {
 
     // 从环境变量获取 GitHub Token
     const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-    const GITHUB_REPO = process.env.GITHUB_REPO || 'unknowlei/nanobanana-website';
+    const GITHUB_REPO = process.env.GITHUB_REPO || (
+      process.env.VERCEL_GIT_REPO_OWNER && process.env.VERCEL_GIT_REPO_SLUG
+        ? `${process.env.VERCEL_GIT_REPO_OWNER}/${process.env.VERCEL_GIT_REPO_SLUG}`
+        : 'yz0851/nanobanana-website'
+    );
     const GITHUB_FILE_PATH = process.env.GITHUB_FILE_PATH || 'public/data.json';
+    const GITHUB_BRANCH = process.env.GITHUB_BRANCH || 'main';
 
     if (!GITHUB_TOKEN) {
       return res.status(500).json({ success: false, error: 'GitHub token not configured' });
@@ -24,14 +33,14 @@ export default async function handler(req, res) {
 
     // 准备要上传的数据
     const dataToUpload = {
+      site,
       sections,
       commonTags,
-      siteNotes,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: lastUpdated || new Date().toISOString()
     };
 
     // 1. 先获取文件的当前 SHA（GitHub API 要求）
-    const getFileUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`;
+    const getFileUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${encodeURIComponent(GITHUB_BRANCH)}`;
     const getFileResponse = await fetch(getFileUrl, {
       headers: {
         'Authorization': `token ${GITHUB_TOKEN}`,
@@ -53,6 +62,7 @@ export default async function handler(req, res) {
     const updatePayload = {
       message: `更新数据 - ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`,
       content: content,
+      branch: GITHUB_BRANCH,
       ...(sha && { sha }) // 如果文件存在，需要提供 SHA
     };
 
