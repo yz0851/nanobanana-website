@@ -201,6 +201,10 @@ function App() {
       return matchesText && matchesTag;
     });
   }, [activeSection, query, selectedTag]);
+  const totalItems = useMemo(
+    () => data.sections.reduce((sum, section) => sum + section.items.length, 0),
+    [data.sections],
+  );
 
   const login = async () => {
     setStatus('正在登录...');
@@ -365,18 +369,28 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.24),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.18),_transparent_30%)] pointer-events-none" />
-      <div className="relative max-w-7xl mx-auto px-4 py-8">
-        <header className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between mb-8">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs text-sky-200 mb-4">
-              <Archive size={14} /> Personal design & prompt vault
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 relative overflow-x-hidden">
+      <div className="static-gradient fixed inset-0 pointer-events-none" />
+      <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_10%,rgba(255,255,255,0.75),transparent_28%),radial-gradient(circle_at_86%_18%,rgba(244,114,182,0.16),transparent_24%),radial-gradient(circle_at_35%_86%,rgba(99,102,241,0.14),transparent_30%)]" />
+
+      <header className="sticky top-0 z-30 border-b border-white/50 bg-white/70 backdrop-blur-md shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-yellow-300 to-orange-400 shadow-lg shadow-orange-200/60 flex items-center justify-center text-2xl">
+              🍌
             </div>
-            <h1 className="text-4xl md:text-5xl font-black tracking-tight">{data.site.title}</h1>
-            <p className="text-slate-300 mt-3 max-w-2xl">{data.site.subtitle}</p>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black tracking-tight bg-gradient-to-r from-slate-900 via-indigo-700 to-purple-700 bg-clip-text text-transparent">
+                {data.site.title}
+              </h1>
+              <p className="text-sm text-slate-500">{data.site.subtitle}</p>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="hidden sm:inline-flex items-center gap-2 rounded-full bg-white/70 border border-white/60 px-3 py-2 text-xs font-bold text-slate-500 shadow-sm">
+              <Archive size={14} /> {totalItems} 个收藏
+            </span>
             {isAdmin ? (
               <>
                 <button onClick={openNewDraft} className="btn-primary"><Plus size={16} /> 新增案例</button>
@@ -387,86 +401,125 @@ function App() {
               <button onClick={() => setIsLoginOpen(true)} className="btn-secondary"><Lock size={16} /> 管理员登录</button>
             )}
           </div>
-        </header>
+        </div>
+      </header>
 
-        {status && <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-sky-100">{status}</div>}
+      <div className="relative max-w-7xl mx-auto px-4 py-8">
+        <section className="glass-panel p-6 md:p-8 mb-6 animate-fade-in-up">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-indigo-100 bg-indigo-50/70 text-xs font-bold text-indigo-600 mb-4">
+                <Archive size={14} /> Personal design & prompt vault
+              </div>
+              <h2 className="text-3xl md:text-5xl font-black tracking-tight text-slate-900">把好看的图和提示词，都收进一个地方</h2>
+              <p className="text-slate-500 mt-3 max-w-2xl leading-7">像原版一样用卡片浏览灵感；你登录后可以粘贴图片上传、添加参考图、写提示词，再同步保存到 GitHub。</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center min-w-[260px]">
+              <div className="rounded-2xl bg-white/70 border border-white/60 px-3 py-4 shadow-sm">
+                <div className="text-2xl font-black text-indigo-600">{data.sections.length}</div>
+                <div className="text-xs font-bold text-slate-400 mt-1">分区</div>
+              </div>
+              <div className="rounded-2xl bg-white/70 border border-white/60 px-3 py-4 shadow-sm">
+                <div className="text-2xl font-black text-purple-600">{totalItems}</div>
+                <div className="text-xs font-bold text-slate-400 mt-1">案例</div>
+              </div>
+              <div className="rounded-2xl bg-white/70 border border-white/60 px-3 py-4 shadow-sm">
+                <div className="text-2xl font-black text-pink-500">{allTags.length}</div>
+                <div className="text-xs font-bold text-slate-400 mt-1">标签</div>
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <section className="grid gap-4 md:grid-cols-[260px_1fr]">
-          <aside className="rounded-3xl border border-white/10 bg-white/5 p-4 h-fit sticky top-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bold text-slate-200">分区</h2>
-              {isAdmin && <button onClick={addSection} className="text-xs text-sky-300 hover:text-sky-100">+ 添加</button>}
+        {status && <div className="mb-5 rounded-2xl border border-indigo-100 bg-white/75 backdrop-blur-md px-4 py-3 text-sm font-medium text-indigo-700 shadow-sm">{status}</div>}
+
+        <section className="grid gap-5 md:grid-cols-[270px_1fr]">
+          <aside className="glass-panel p-4 h-fit sticky top-24">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-black text-slate-800">灵感分区</h2>
+              {isAdmin && <button onClick={addSection} className="text-xs font-bold text-indigo-600 hover:text-purple-600">+ 添加</button>}
             </div>
             <div className="space-y-2">
               {data.sections.map((section) => (
                 <button
                   key={section.id}
                   onClick={() => setActiveSectionId(section.id)}
-                  className={`w-full text-left rounded-2xl px-4 py-3 transition ${activeSectionId === section.id ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'bg-white/5 hover:bg-white/10 text-slate-300'}`}
+                  className={`w-full text-left rounded-2xl px-4 py-3 transition shadow-sm ${activeSectionId === section.id ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-indigo-200' : 'bg-white/60 hover:bg-white/90 text-slate-600 border border-white/60'}`}
                 >
-                  <div className="font-bold">{section.title}</div>
-                  <div className="text-xs opacity-80">{section.items.length} 个案例</div>
+                  <div className="font-black">{section.title}</div>
+                  <div className={`text-xs mt-1 ${activeSectionId === section.id ? 'text-indigo-100' : 'text-slate-400'}`}>{section.items.length} 个案例</div>
                 </button>
               ))}
             </div>
             {isAdmin && activeSection && (
-              <button onClick={renameSection} className="mt-3 w-full rounded-2xl border border-white/10 px-4 py-2 text-sm text-slate-300 hover:bg-white/10">
+              <button onClick={renameSection} className="mt-3 w-full rounded-2xl border border-indigo-100 bg-white/60 px-4 py-2.5 text-sm font-bold text-indigo-600 hover:bg-indigo-50 transition">
                 编辑当前分区名
               </button>
             )}
           </aside>
 
           <main>
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-4 mb-4">
+            <div className="glass-panel p-4 mb-5">
               <div className="flex flex-col gap-3 md:flex-row">
                 <label className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-300" size={18} />
                   <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="搜索标题、提示词、备注、标签..."
-                    className="w-full rounded-2xl bg-slate-900/80 border border-white/10 pl-11 pr-4 py-3 outline-none focus:border-sky-400"
+                    className="field pl-11"
                   />
                 </label>
                 <select
                   value={selectedTag}
                   onChange={(e) => setSelectedTag(e.target.value)}
-                  className="rounded-2xl bg-slate-900/80 border border-white/10 px-4 py-3 outline-none focus:border-sky-400"
+                  className="field md:w-48"
                 >
                   <option value="">全部标签</option>
                   {allTags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
                 </select>
               </div>
+              {allTags.length > 0 && (
+                <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                  <button onClick={() => setSelectedTag('')} className={`chip shrink-0 ${!selectedTag ? 'chip-active' : ''}`}>全部</button>
+                  {allTags.slice(0, 18).map((tag) => (
+                    <button key={tag} onClick={() => setSelectedTag(tag)} className={`chip shrink-0 ${selectedTag === tag ? 'chip-active' : ''}`}>{tag}</button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex items-end justify-between mb-4">
               <div>
-                <h2 className="text-2xl font-black">{activeSection?.title || '案例'}</h2>
-                {activeSection?.description && <p className="text-sm text-slate-400 mt-1">{activeSection.description}</p>}
+                <h2 className="text-2xl font-black text-slate-900">{activeSection?.title || '案例'}</h2>
+                {activeSection?.description && <p className="text-sm text-slate-500 mt-1">{activeSection.description}</p>}
               </div>
-              <span className="text-sm text-slate-400">{filteredItems.length} 条</span>
+              <span className="rounded-full bg-white/70 border border-white/60 px-3 py-1 text-sm font-bold text-slate-500 shadow-sm">{filteredItems.length} 条</span>
             </div>
 
             {filteredItems.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-white/15 bg-white/5 p-12 text-center text-slate-400">
-                <ImageIcon className="mx-auto mb-3 opacity-50" size={42} />
-                <p>这里还没有案例。{isAdmin ? '点击“新增案例”开始收藏。' : ''}</p>
+              <div className="glass-panel border-dashed border-indigo-100 p-12 text-center text-slate-500">
+                <div className="mx-auto mb-4 h-16 w-16 rounded-3xl bg-indigo-50 flex items-center justify-center text-indigo-300">
+                  <ImageIcon size={38} />
+                </div>
+                <p className="font-bold text-slate-600">这里还没有案例</p>
+                <p className="text-sm mt-1">{isAdmin ? '点击“新增案例”开始收藏，或者直接粘贴图片。' : '管理员登录后可以添加内容。'}</p>
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
                 {filteredItems.map((item) => (
-                  <article key={item.id} className="group overflow-hidden rounded-3xl border border-white/10 bg-white/[0.06] hover:bg-white/[0.09] transition">
+                  <article key={item.id} className="group overflow-hidden rounded-3xl border border-white/60 bg-white/70 backdrop-blur-md shadow-sm hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-100/70 transition duration-300">
                     <button onClick={() => setViewingItem(item)} className="block w-full text-left">
-                      <div className="aspect-[4/3] bg-slate-900 overflow-hidden">
+                      <div className="aspect-[4/3] bg-gradient-to-br from-slate-100 to-indigo-50 overflow-hidden">
                         {item.images?.[0] ? (
                           <img src={item.images[0]} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-600"><ImageIcon size={44} /></div>
+                          <div className="w-full h-full flex items-center justify-center text-indigo-200"><ImageIcon size={44} /></div>
                         )}
                       </div>
                       <div className="p-4">
-                        <h3 className="font-black text-lg line-clamp-1">{item.title}</h3>
-                        <p className="text-sm text-slate-400 mt-2 line-clamp-2">{item.prompt || item.notes || '暂无提示词'}</p>
+                        <h3 className="font-black text-lg text-slate-900 line-clamp-1">{item.title}</h3>
+                        <p className="text-sm text-slate-500 mt-2 line-clamp-2 leading-6">{item.prompt || item.notes || '暂无提示词'}</p>
                         <div className="flex flex-wrap gap-2 mt-3">
                           {(item.tags || []).slice(0, 4).map((tag) => <span key={tag} className="chip">{tag}</span>)}
                         </div>
@@ -483,7 +536,7 @@ function App() {
       {isLoginOpen && (
         <Modal onClose={() => setIsLoginOpen(false)}>
           <h3 className="text-xl font-black mb-2">管理员登录</h3>
-          <p className="text-sm text-slate-400 mb-4">输入你在 Vercel 环境变量里设置的 ADMIN_PASSWORD。</p>
+          <p className="text-sm text-slate-500 mb-4">输入你在 Vercel 环境变量里设置的 ADMIN_PASSWORD。</p>
           <input
             type="password"
             value={loginPassword}
@@ -515,23 +568,23 @@ function App() {
           <ImageGallery title="参考图（可选）" images={viewingItem.referenceImages} />
 
           {viewingItem.sourceUrl && (
-            <a href={viewingItem.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm text-sky-300 hover:text-sky-100 mb-4">
+            <a href={viewingItem.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-bold text-indigo-600 hover:text-purple-600 mb-4">
               <LinkIcon size={15} /> 来源链接
             </a>
           )}
 
-          <section className="rounded-2xl bg-slate-900/80 border border-white/10 p-4 mb-4">
+          <section className="rounded-2xl bg-white/70 border border-white/60 p-4 mb-4 shadow-sm">
             <div className="flex items-center justify-between mb-2">
-              <h4 className="font-bold">提示词</h4>
-              <button onClick={() => copyPrompt(viewingItem.prompt)} className="text-sm text-sky-300 hover:text-sky-100 flex items-center gap-1"><Copy size={14} /> 复制</button>
+              <h4 className="font-black text-slate-800">提示词</h4>
+              <button onClick={() => copyPrompt(viewingItem.prompt)} className="text-sm font-bold text-indigo-600 hover:text-purple-600 flex items-center gap-1"><Copy size={14} /> 复制</button>
             </div>
-            <p className="whitespace-pre-wrap text-sm leading-7 text-slate-200">{viewingItem.prompt || '暂无提示词'}</p>
+            <p className="whitespace-pre-wrap text-sm leading-7 text-slate-600">{viewingItem.prompt || '暂无提示词'}</p>
           </section>
 
           {viewingItem.notes && (
-            <section className="rounded-2xl bg-white/5 border border-white/10 p-4">
-              <h4 className="font-bold mb-2">备注</h4>
-              <p className="whitespace-pre-wrap text-sm leading-7 text-slate-300">{viewingItem.notes}</p>
+            <section className="rounded-2xl bg-indigo-50/50 border border-indigo-100 p-4">
+              <h4 className="font-black text-slate-800 mb-2">备注</h4>
+              <p className="whitespace-pre-wrap text-sm leading-7 text-slate-600">{viewingItem.notes}</p>
             </section>
           )}
         </Modal>
@@ -542,7 +595,7 @@ function App() {
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
               <h3 className="text-2xl font-black">{draft.id ? '编辑案例' : '新增案例'}</h3>
-              <p className="text-sm text-slate-400 mt-1">可以点击上传，也可以直接复制图片后 Ctrl+V 粘贴。</p>
+              <p className="text-sm text-slate-500 mt-1">可以点击上传，也可以直接复制图片后 Ctrl+V 粘贴。</p>
             </div>
             <button onClick={saveDraft} className="btn-primary"><Check size={16} /> 保存到页面</button>
           </div>
@@ -607,9 +660,9 @@ function App() {
 
 function Modal({ children, onClose, wide = false }) {
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className={`relative mx-auto my-8 rounded-3xl border border-white/10 bg-slate-950 shadow-2xl p-5 ${wide ? 'max-w-5xl' : 'max-w-md'}`}>
-        <button onClick={onClose} className="absolute right-4 top-4 p-2 rounded-full bg-white/5 hover:bg-white/10"><X size={18} /></button>
+    <div className="fixed inset-0 z-50 bg-slate-900/35 backdrop-blur-md p-4 overflow-y-auto">
+      <div className={`relative mx-auto my-8 rounded-[2rem] border border-white/70 bg-white/90 backdrop-blur-xl shadow-2xl shadow-indigo-200/60 p-5 text-slate-800 ${wide ? 'max-w-5xl' : 'max-w-md'}`}>
+        <button onClick={onClose} className="absolute right-4 top-4 p-2 rounded-full bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition"><X size={18} /></button>
         {children}
       </div>
     </div>
@@ -620,10 +673,10 @@ function ImageGallery({ title, images = [] }) {
   if (!images.length) return null;
   return (
     <section className="mb-5">
-      <h4 className="font-bold mb-3 flex items-center gap-2"><Eye size={16} /> {title}</h4>
+      <h4 className="font-black text-slate-800 mb-3 flex items-center gap-2"><Eye size={16} className="text-indigo-500" /> {title}</h4>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {images.map((url) => (
-          <a key={url} href={url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+          <a key={url} href={url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-2xl border border-white/60 bg-white/70 shadow-sm hover:shadow-lg hover:shadow-indigo-100 transition">
             <img src={url} alt="" className="w-full aspect-[4/3] object-cover hover:scale-105 transition duration-500" />
           </a>
         ))}
@@ -635,14 +688,15 @@ function ImageGallery({ title, images = [] }) {
 function UploadBox({ title, images, active, onFocus, onUpload, onRemove }) {
   const inputRef = useRef(null);
   return (
-    <div onClick={onFocus} className={`rounded-3xl border p-4 ${active ? 'border-sky-400 bg-sky-400/10' : 'border-white/10 bg-white/5'}`}>
+    <div onClick={onFocus} className={`rounded-3xl border p-4 transition ${active ? 'border-indigo-300 bg-indigo-50/70 shadow-lg shadow-indigo-100' : 'border-white/60 bg-white/70 hover:bg-white/90'}`}>
       <div className="flex items-center justify-between mb-3">
-        <h4 className="font-bold">{title}</h4>
-        {active && <span className="text-xs text-sky-200 flex items-center gap-1"><Clipboard size={13} /> 粘贴到这里</span>}
+        <h4 className="font-black text-slate-800">{title}</h4>
+        {active && <span className="text-xs font-bold text-indigo-600 flex items-center gap-1"><Clipboard size={13} /> 粘贴到这里</span>}
       </div>
-      <button onClick={() => inputRef.current?.click()} className="w-full rounded-2xl border border-dashed border-white/20 py-6 text-slate-300 hover:bg-white/5">
-        <UploadCloud className="mx-auto mb-2" />
-        点击上传，或复制图片后 Ctrl+V
+      <button onClick={() => inputRef.current?.click()} className="w-full rounded-2xl border border-dashed border-indigo-200 bg-white/60 py-7 text-slate-500 hover:bg-indigo-50/70 transition">
+        <UploadCloud className="mx-auto mb-2 text-indigo-400" />
+        <span className="font-bold text-slate-600">点击上传</span>
+        <span className="block text-xs mt-1">或复制图片后 Ctrl+V</span>
       </button>
       <input
         ref={inputRef}
@@ -655,9 +709,9 @@ function UploadBox({ title, images, active, onFocus, onUpload, onRemove }) {
       {images.length > 0 && (
         <div className="grid grid-cols-3 gap-2 mt-3">
           {images.map((url) => (
-            <div key={url} className="relative overflow-hidden rounded-xl bg-slate-900">
+            <div key={url} className="relative overflow-hidden rounded-xl bg-slate-100 shadow-sm">
               <img src={url} alt="" className="aspect-square w-full object-cover" />
-              <button onClick={() => onRemove(url)} className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white"><X size={13} /></button>
+              <button onClick={() => onRemove(url)} className="absolute right-1 top-1 rounded-full bg-white/90 p-1 text-rose-500 shadow hover:bg-rose-50"><X size={13} /></button>
             </div>
           ))}
         </div>
