@@ -1,6 +1,7 @@
 .vercel
 node_modules
 .npm-cache/
+.codex-temp/
 dist
 .env
 .env.local
