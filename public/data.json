@@ -3,20 +3,27 @@
     "title": "Product Prompt Vault",
     "subtitle": "收藏优秀产品图、网页设计图、参考图与提示词。"
   },
-  "commonTags": [
-    "网站设计",
-    "产品图",
-    "科技感",
-    "B2B",
-    "极简",
-    "高级感"
-  ],
   "sections": [
     {
       "id": "website-design",
       "title": "网站设计",
       "description": "官网、落地页、SaaS 页面、版式与交互灵感。",
-      "items": []
+      "items": [
+        {
+          "id": "item-1784608314301-cwslwm",
+          "title": "未命名案例",
+          "prompt": "一张macbook真实屏幕截图， 16:10 的 KUNETIC Energy Management System 工业监控界面视觉，用于户外工商业储能系统。浅色专业操作界面，展示太阳能、储能电池、PCS、电网和柴油发电机的协调状态；可包含趋势曲线、运行状态、告警概览和策略控制区域。界面应克制、可信、现代，使用白色、浅灰、KUNETIC 蓝色和少量绿色状态色。不要使用深蓝大屏控制台风格，不要出现虚构品牌、夸张数据、乱码或不必要的营销文案。界面文字仅可使用已批准的英文功能名称。",
+          "images": [
+            "https://files.catbox.moe/vq6zy5.jpg"
+          ],
+          "referenceImages": [],
+          "tags": [],
+          "sourceUrl": "",
+          "notes": "",
+          "createdAt": "2026-07-21T04:31:54.301Z",
+          "updatedAt": "2026-07-21T04:31:54.301Z"
+        }
+      ]
     },
     {
       "id": "product-image",
@@ -31,5 +38,13 @@
       "items": []
     }
   ],
-  "lastUpdated": "2026-07-20T00:00:00.000Z"
+  "commonTags": [
+    "网站设计",
+    "产品图",
+    "科技感",
+    "B2B",
+    "极简",
+    "高级感"
+  ],
+  "lastUpdated": "2026-07-21T04:31:54.302Z"
 }
