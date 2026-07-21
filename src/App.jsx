@@ -49,24 +49,69 @@ const EMPTY_DATA = {
 };
 
 const uid = () => `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const IMAGE_URL_REGEX = /https?:\/\/[^\s"'<>]+?\.(?:png|jpe?g|gif|webp|avif|bmp|svg)(?:\?[^\s"'<>]*)?/gi;
+const URL_REGEX = /https?:\/\/[^\s"'<>]+/gi;
+const IMAGE_URL_REGEX = /https?:\/\/[^\s"'<>]+?\.(?:png|jpe?g|gif|webp|avif|apng|bmp|svg|ico|tiff?|heic|heif|jxl)(?:\?[^\s"'<>]*)?/gi;
 const DATA_CACHE_KEY = 'product_prompt_vault_data_cache_v1';
+const DIRECT_DISPLAY_EXTENSIONS = new Set(['gif', 'svg', 'apng', 'ico', 'tif', 'tiff', 'heic', 'heif', 'jxl']);
+const LOSSLESS_UPLOAD_MIMES = new Set([
+  'image/gif',
+  'image/svg+xml',
+  'image/apng',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+  'image/jxl',
+  'image/tiff',
+  'image/x-icon',
+  'image/vnd.microsoft.icon',
+]);
+const COMPRESSIBLE_UPLOAD_MIMES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/bmp',
+  'image/x-ms-bmp',
+]);
 
-const extractImageUrls = (text = '') => Array.from(new Set(text.match(IMAGE_URL_REGEX) || []));
+const extractImageUrls = (text = '', { allowAnyUrl = false } = {}) => {
+  const regex = allowAnyUrl ? URL_REGEX : IMAGE_URL_REGEX;
+  return Array.from(new Set(text.match(regex) || []));
+};
 const getDisplayImageSrc = (url = '', width = 900) => {
   if (!url || typeof url !== 'string') return '';
   if (url.startsWith('data:image/')) return url;
   if (!url.startsWith('http')) return url;
   if (url.includes('wsrv.nl')) return url;
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    const ext = pathname.split('.').pop();
+    if (DIRECT_DISPLAY_EXTENSIONS.has(ext)) return url;
+  } catch (error) {
+    return url;
+  }
   return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=${width}&q=90&output=webp`;
 };
 
 const extensionFromMime = (mime = '') => {
-  if (mime.includes('png')) return 'png';
-  if (mime.includes('webp')) return 'webp';
-  if (mime.includes('gif')) return 'gif';
-  if (mime.includes('avif')) return 'avif';
-  return 'jpg';
+  const normalized = mime.toLowerCase().split(';')[0].trim();
+  if (normalized.includes('svg')) return 'svg';
+  if (normalized.includes('apng')) return 'apng';
+  if (normalized.includes('png')) return 'png';
+  if (normalized.includes('webp')) return 'webp';
+  if (normalized.includes('gif')) return 'gif';
+  if (normalized.includes('avif')) return 'avif';
+  if (normalized.includes('bmp')) return 'bmp';
+  if (normalized.includes('icon')) return 'ico';
+  if (normalized.includes('tiff')) return 'tiff';
+  if (normalized.includes('heic')) return 'heic';
+  if (normalized.includes('heif')) return 'heif';
+  if (normalized.includes('jxl')) return 'jxl';
+  if (normalized.startsWith('image/')) {
+    const subtype = normalized.slice('image/'.length).replace(/^x-/, '').replace(/\+xml$/, '');
+    const safeSubtype = subtype.replace(/[^a-z0-9-]/g, '').slice(0, 12);
+    if (safeSubtype) return safeSubtype;
+  }
+  return 'img';
 };
 
 const normalizeData = (raw) => {
@@ -133,6 +178,7 @@ const emptyDraft = (sectionId = '') => ({
 });
 
 async function compressImage(file) {
+  const mime = (file.type || '').toLowerCase();
   const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
@@ -140,7 +186,11 @@ async function compressImage(file) {
     reader.readAsDataURL(file);
   });
 
-  if (file.size < 1.5 * 1024 * 1024) {
+  if (
+    file.size < 1.5 * 1024 * 1024
+    || LOSSLESS_UPLOAD_MIMES.has(mime)
+    || !COMPRESSIBLE_UPLOAD_MIMES.has(mime)
+  ) {
     return dataUrl;
   }
 
@@ -407,7 +457,7 @@ function App() {
       }
 
       if (text.trim()) {
-        const imageUrls = mode !== 'text' ? extractImageUrls(text) : [];
+        const imageUrls = mode !== 'text' ? extractImageUrls(text, { allowAnyUrl: mode === 'image' }) : [];
         if (imageUrls.length) {
           addImageUrls(imageUrls, target);
           return;

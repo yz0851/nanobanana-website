@@ -2,18 +2,43 @@ import { requireAdmin } from './_auth.js';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const mimeToExtension = (mime = '') => {
+  const normalized = mime.toLowerCase().split(';')[0].trim();
+  const known = {
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'image/avif': 'avif',
+    'image/apng': 'apng',
+    'image/bmp': 'bmp',
+    'image/x-ms-bmp': 'bmp',
+    'image/svg+xml': 'svg',
+    'image/x-icon': 'ico',
+    'image/vnd.microsoft.icon': 'ico',
+    'image/tiff': 'tiff',
+    'image/heic': 'heic',
+    'image/heif': 'heif',
+    'image/jxl': 'jxl',
+  };
+
+  if (known[normalized]) return known[normalized];
+  if (normalized.startsWith('image/')) {
+    const subtype = normalized.slice('image/'.length).replace(/^x-/, '').replace(/\+xml$/, '');
+    const safeSubtype = subtype.replace(/[^a-z0-9-]/g, '').slice(0, 12);
+    if (safeSubtype) return safeSubtype;
+  }
+
+  return 'img';
+};
+
 const getImageParts = (image) => {
-  const dataUrlMatch = String(image).match(/^data:(image\/[\w.+-]+);base64,(.+)$/);
-  const mime = dataUrlMatch?.[1] || 'image/jpeg';
+  const dataUrlMatch = String(image).match(/^data:([^;,]+)(?:;[^,]*)?;base64,(.+)$/);
+  const mime = dataUrlMatch?.[1]?.toLowerCase() || 'image/jpeg';
   const base64Data = dataUrlMatch?.[2] || String(image);
   const buffer = Buffer.from(base64Data, 'base64');
-  const ext = mime.includes('png')
-    ? 'png'
-    : mime.includes('webp')
-      ? 'webp'
-      : mime.includes('gif')
-        ? 'gif'
-        : 'jpg';
+  const ext = mimeToExtension(mime);
 
   return { buffer, mime, ext };
 };
@@ -82,6 +107,9 @@ export default async function handler(req, res) {
     }
 
     const { buffer, mime, ext } = getImageParts(image);
+    if (!mime.startsWith('image/')) {
+      return res.status(400).json({ success: false, error: '只支持图片文件，请重新复制或选择图片' });
+    }
     if (!buffer.length) {
       return res.status(400).json({ success: false, error: '图片数据为空，请重新复制或重新选择图片' });
     }
