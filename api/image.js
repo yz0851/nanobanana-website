@@ -1,7 +1,7 @@
 const ALLOWED_HOSTS = new Set(['files.catbox.moe']);
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') {
+  if (!['GET', 'HEAD'].includes(req.method)) {
     return res.status(405).send('Method not allowed');
   }
 
@@ -34,7 +34,11 @@ export default async function handler(req, res) {
     }
 
     res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Length', buffer.length);
     res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=31536000, immutable');
+    if (req.method === 'HEAD') {
+      return res.status(200).end();
+    }
     return res.status(200).send(buffer);
   } catch (error) {
     return res.status(500).send(error.message || 'Image proxy failed');
