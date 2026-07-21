@@ -49,6 +49,17 @@ const EMPTY_DATA = {
 };
 
 const uid = () => `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const IMAGE_URL_REGEX = /https?:\/\/[^\s"'<>]+?\.(?:png|jpe?g|gif|webp|avif|bmp|svg)(?:\?[^\s"'<>]*)?/gi;
+
+const extractImageUrls = (text = '') => Array.from(new Set(text.match(IMAGE_URL_REGEX) || []));
+
+const extensionFromMime = (mime = '') => {
+  if (mime.includes('png')) return 'png';
+  if (mime.includes('webp')) return 'webp';
+  if (mime.includes('gif')) return 'gif';
+  if (mime.includes('avif')) return 'avif';
+  return 'jpg';
+};
 
 const normalizeData = (raw) => {
   if (!raw || typeof raw !== 'object') return EMPTY_DATA;
@@ -254,6 +265,81 @@ function App() {
       [target]: [...(current?.[target] || []), ...uploadedUrls],
     }));
     setStatus(`已上传 ${uploadedUrls.length} 张图片`);
+  };
+
+  const addImageUrls = (urls, target = uploadTarget) => {
+    if (!urls.length) return;
+    setDraft((current) => ({
+      ...current,
+      [target]: Array.from(new Set([...(current?.[target] || []), ...urls])),
+    }));
+    setUploadTarget(target);
+    setStatus(`已粘贴 ${urls.length} 个图片链接`);
+  };
+
+  const appendPromptText = (text) => {
+    const cleanText = text.trim();
+    if (!cleanText) return false;
+    setDraft((current) => ({
+      ...current,
+      prompt: current?.prompt?.trim()
+        ? `${current.prompt.trimEnd()}\n\n${cleanText}`
+        : cleanText,
+    }));
+    setStatus('已粘贴到提示词');
+    return true;
+  };
+
+  const pasteFromClipboard = async ({ mode = 'smart', target = uploadTarget } = {}) => {
+    if (!draft || !isAdmin) return;
+    if (!navigator.clipboard) {
+      setStatus('当前浏览器不支持按钮读取剪贴板，请用 Ctrl+V 粘贴');
+      return;
+    }
+
+    try {
+      let text = '';
+      const imageFiles = [];
+
+      if (navigator.clipboard.read) {
+        const clipboardItems = await navigator.clipboard.read();
+        for (const item of clipboardItems) {
+          const imageType = item.types.find((type) => type.startsWith('image/'));
+          if (imageType) {
+            const blob = await item.getType(imageType);
+            imageFiles.push(new File([blob], `clipboard-${Date.now()}.${extensionFromMime(imageType)}`, { type: imageType }));
+          }
+          if (!text && item.types.includes('text/plain')) {
+            const blob = await item.getType('text/plain');
+            text = await blob.text();
+          }
+        }
+      } else if (navigator.clipboard.readText) {
+        text = await navigator.clipboard.readText();
+      }
+
+      if (imageFiles.length && mode !== 'text') {
+        setUploadTarget(target);
+        await uploadFiles(imageFiles, target);
+        return;
+      }
+
+      if (text.trim()) {
+        const imageUrls = mode !== 'text' ? extractImageUrls(text) : [];
+        if (imageUrls.length) {
+          addImageUrls(imageUrls, target);
+          return;
+        }
+        if (mode !== 'image') {
+          appendPromptText(text);
+          return;
+        }
+      }
+
+      setStatus(mode === 'image' ? '剪贴板里没有图片或图片链接' : '剪贴板里没有可用的图片或文字');
+    } catch (error) {
+      setStatus('读取剪贴板失败：请允许浏览器剪贴板权限，或用 Ctrl+V 粘贴');
+    }
   };
 
   const openNewDraft = () => {
@@ -595,9 +681,12 @@ function App() {
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
               <h3 className="text-2xl font-black">{draft.id ? '编辑案例' : '新增案例'}</h3>
-              <p className="text-sm text-slate-500 mt-1">可以点击上传，也可以直接复制图片后 Ctrl+V 粘贴。</p>
+              <p className="text-sm text-slate-500 mt-1">复制图片、图片链接或提示词后，点 Paste 就能自动放到合适的位置。</p>
             </div>
-            <button onClick={saveDraft} className="btn-primary"><Check size={16} /> 保存到页面</button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button onClick={() => pasteFromClipboard({ mode: 'smart', target: uploadTarget })} className="btn-secondary"><Clipboard size={16} /> Paste 智能粘贴</button>
+              <button onClick={saveDraft} className="btn-primary"><Check size={16} /> 保存到页面</button>
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -630,6 +719,7 @@ function App() {
               active={uploadTarget === 'images'}
               onFocus={() => setUploadTarget('images')}
               onUpload={(files) => uploadFiles(files, 'images')}
+              onPaste={() => pasteFromClipboard({ mode: 'image', target: 'images' })}
               onRemove={(url) => setDraft({ ...draft, images: draft.images.filter((item) => item !== url) })}
               fileInputRef={fileInputRef}
             />
@@ -639,12 +729,18 @@ function App() {
               active={uploadTarget === 'referenceImages'}
               onFocus={() => setUploadTarget('referenceImages')}
               onUpload={(files) => uploadFiles(files, 'referenceImages')}
+              onPaste={() => pasteFromClipboard({ mode: 'image', target: 'referenceImages' })}
               onRemove={(url) => setDraft({ ...draft, referenceImages: draft.referenceImages.filter((item) => item !== url) })}
             />
           </div>
 
           <label className="block mt-4">
-            <span className="label">提示词</span>
+            <span className="label flex items-center justify-between gap-3">
+              提示词
+              <button type="button" onClick={() => pasteFromClipboard({ mode: 'text' })} className="text-xs font-black text-indigo-600 hover:text-purple-600 flex items-center gap-1">
+                <Clipboard size={13} /> Paste 提示词
+              </button>
+            </span>
             <textarea className="field min-h-[180px]" value={draft.prompt} onChange={(e) => setDraft({ ...draft, prompt: e.target.value })} placeholder="描述如何根据参考图生成目标图..." />
           </label>
 
@@ -685,7 +781,7 @@ function ImageGallery({ title, images = [] }) {
   );
 }
 
-function UploadBox({ title, images, active, onFocus, onUpload, onRemove }) {
+function UploadBox({ title, images, active, onFocus, onUpload, onPaste, onRemove }) {
   const inputRef = useRef(null);
   return (
     <div onClick={onFocus} className={`rounded-3xl border p-4 transition ${active ? 'border-indigo-300 bg-indigo-50/70 shadow-lg shadow-indigo-100' : 'border-white/60 bg-white/70 hover:bg-white/90'}`}>
@@ -693,11 +789,18 @@ function UploadBox({ title, images, active, onFocus, onUpload, onRemove }) {
         <h4 className="font-black text-slate-800">{title}</h4>
         {active && <span className="text-xs font-bold text-indigo-600 flex items-center gap-1"><Clipboard size={13} /> 粘贴到这里</span>}
       </div>
-      <button onClick={() => inputRef.current?.click()} className="w-full rounded-2xl border border-dashed border-indigo-200 bg-white/60 py-7 text-slate-500 hover:bg-indigo-50/70 transition">
-        <UploadCloud className="mx-auto mb-2 text-indigo-400" />
-        <span className="font-bold text-slate-600">点击上传</span>
-        <span className="block text-xs mt-1">或复制图片后 Ctrl+V</span>
-      </button>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <button type="button" onClick={() => inputRef.current?.click()} className="rounded-2xl border border-dashed border-indigo-200 bg-white/60 py-7 text-slate-500 hover:bg-indigo-50/70 transition">
+          <UploadCloud className="mx-auto mb-2 text-indigo-400" />
+          <span className="font-bold text-slate-600">点击上传</span>
+          <span className="block text-xs mt-1">选择本地图片</span>
+        </button>
+        <button type="button" onClick={onPaste} className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/80 py-7 text-slate-500 hover:from-indigo-50 hover:to-purple-50 transition shadow-sm">
+          <Clipboard className="mx-auto mb-2 text-indigo-500" />
+          <span className="font-bold text-slate-700">Paste 图片</span>
+          <span className="block text-xs mt-1">读取剪贴板图片/链接</span>
+        </button>
+      </div>
       <input
         ref={inputRef}
         type="file"
