@@ -3,4 +3,5 @@ node_modules
 dist
 .codex-temp
 .git
+package-lock.json
 *.log
