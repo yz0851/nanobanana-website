@@ -2,15 +2,6 @@ import { requireAdmin } from './_auth.js';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const getRepoConfig = () => ({
-  repo: process.env.GITHUB_REPO || (
-    process.env.VERCEL_GIT_REPO_OWNER && process.env.VERCEL_GIT_REPO_SLUG
-      ? `${process.env.VERCEL_GIT_REPO_OWNER}/${process.env.VERCEL_GIT_REPO_SLUG}`
-      : 'yz0851/nanobanana-website'
-  ),
-  branch: process.env.GITHUB_BRANCH || 'main',
-});
-
 const getImageParts = (image) => {
   const dataUrlMatch = String(image).match(/^data:(image\/[\w.+-]+);base64,(.+)$/);
   const mime = dataUrlMatch?.[1] || 'image/jpeg';
@@ -75,43 +66,6 @@ const uploadToCatbox = async ({ buffer, mime, ext, userhash }) => {
   return text;
 };
 
-const uploadToGitHub = async ({ buffer, ext }) => {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    throw new Error('GitHub token not configured');
-  }
-
-  const { repo, branch } = getRepoConfig();
-  const now = new Date();
-  const yyyy = now.getUTCFullYear();
-  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const fileName = `vault-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const filePath = `public/uploads/${yyyy}-${mm}/${fileName}`;
-  const uploadUrl = `https://api.github.com/repos/${repo}/contents/${filePath}`;
-
-  const response = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: {
-      'Authorization': `token ${token}`,
-      'Accept': 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json',
-      'User-Agent': 'product-prompt-vault',
-    },
-    body: JSON.stringify({
-      message: `上传图片 - ${fileName}`,
-      content: buffer.toString('base64'),
-      branch,
-    }),
-  });
-
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(json.message || 'GitHub image upload failed');
-  }
-
-  return `https://raw.githubusercontent.com/${repo}/${branch}/${filePath}`;
-};
-
 // Vercel Serverless Function - Catbox 图床上传
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -133,36 +87,28 @@ export default async function handler(req, res) {
     }
 
     const userhash = process.env.CATBOX_USERHASH;
-    let catboxError = '';
-
-    if (userhash) {
-      try {
-        const url = await uploadToCatbox({ buffer, mime, ext, userhash });
-        const verifyResult = await verifyImageUrl(url);
-        if (verifyResult.ok) {
-          return res.status(200).json({ success: true, url, provider: 'catbox' });
-        }
-        catboxError = `Catbox 返回了不可读取的图片：${verifyResult.error}`;
-      } catch (error) {
-        catboxError = error.message || 'Catbox upload failed';
-      }
-    } else {
-      catboxError = '还没有配置 CATBOX_USERHASH 环境变量';
+    if (!userhash) {
+      return res.status(500).json({ success: false, error: '还没有配置 CATBOX_USERHASH 环境变量' });
     }
 
     try {
-      const url = await uploadToGitHub({ buffer, ext });
-      return res.status(200).json({
-        success: true,
-        url,
-        provider: 'github',
-        warning: `Catbox 暂时不可用，已自动改存到 GitHub。${catboxError}`,
-      });
-    } catch (githubError) {
+      const url = await uploadToCatbox({ buffer, mime, ext, userhash });
+      const verifyResult = await verifyImageUrl(url);
+      if (verifyResult.ok) {
+        return res.status(200).json({ success: true, url, provider: 'catbox' });
+      }
+
       return res.status(502).json({
         success: false,
-        error: '图片上传失败：Catbox 不可用，GitHub 备用上传也失败',
-        details: `Catbox: ${catboxError}; GitHub: ${githubError.message || 'unknown error'}`,
+        error: 'Catbox 返回了图片地址，但文件暂时不可读取。已重试 3 次，请重新上传一次',
+        details: verifyResult.error,
+        url,
+      });
+    } catch (catboxError) {
+      return res.status(502).json({
+        success: false,
+        error: 'Catbox 上传失败',
+        details: catboxError.message || 'unknown error',
       });
     }
 
