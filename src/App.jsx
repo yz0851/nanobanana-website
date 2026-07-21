@@ -144,6 +144,7 @@ function App() {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [status, setStatus] = useState('');
   const [uploadTarget, setUploadTarget] = useState('images');
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -260,25 +261,31 @@ function App() {
     if (!files.length) return;
     setStatus(`正在上传 ${files.length} 张图片到 Catbox...`);
     const uploadedUrls = [];
-    for (const file of files) {
-      const image = await compressImage(file);
-      const res = await fetch('/api/catbox', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image }),
-      });
-      const json = await res.json();
-      if (!json.success) {
-        setStatus(json.error || '图片上传失败');
-        return;
+    try {
+      for (const file of files) {
+        const image = await compressImage(file);
+        const res = await fetch('/api/catbox', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.success) {
+          setStatus(json.details || json.error || '图片上传失败');
+          return false;
+        }
+        uploadedUrls.push(json.url);
       }
-      uploadedUrls.push(json.url);
+      setDraft((current) => ({
+        ...current,
+        [target]: [...(current?.[target] || []), ...uploadedUrls],
+      }));
+      setStatus(`已上传 ${uploadedUrls.length} 张图片，可以继续编辑或保存并同步`);
+      return true;
+    } catch (error) {
+      setStatus(`图片上传失败：${error.message || '请稍后重试'}`);
+      return false;
     }
-    setDraft((current) => ({
-      ...current,
-      [target]: [...(current?.[target] || []), ...uploadedUrls],
-    }));
-    setStatus(`已上传 ${uploadedUrls.length} 张图片`);
   };
 
   const addImageUrls = (urls, target = uploadTarget) => {
@@ -288,7 +295,7 @@ function App() {
       [target]: Array.from(new Set([...(current?.[target] || []), ...urls])),
     }));
     setUploadTarget(target);
-    setStatus(`已粘贴 ${urls.length} 个图片链接`);
+    setStatus(`已粘贴 ${urls.length} 个图片链接，可以继续编辑或保存并同步`);
   };
 
   const appendPromptText = (text) => {
@@ -376,12 +383,44 @@ function App() {
     });
   };
 
-  const saveDraft = () => {
+  const syncDataToGitHub = async (sourceData = data, {
+    startMessage = '正在同步到 GitHub...',
+    successMessage = '同步成功，刷新网页后会读取 GitHub 最新数据',
+  } = {}) => {
+    setStatus(startMessage);
+    const payload = {
+      ...sourceData,
+      lastUpdated: new Date().toISOString(),
+    };
+
+    try {
+      const res = await fetch('/api/sync-github', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) {
+        throw new Error(json.details || json.error || '同步失败');
+      }
+      setData(payload);
+      setStatus(successMessage);
+      return true;
+    } catch (error) {
+      setStatus(`同步失败：${error.message || '请稍后重试'}。当前页面暂时保留，刷新前请再点“同步”。`);
+      return false;
+    }
+  };
+
+  const saveDraft = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
     const tags = draft.tagsText
       .split(/[,，]/)
       .map((tag) => tag.trim())
       .filter(Boolean);
     const now = new Date().toISOString();
+    const targetSectionId = draft.sectionId || data.sections[0]?.id || '';
     const item = {
       id: draft.id || uid(),
       title: draft.title || '未命名案例',
@@ -395,11 +434,11 @@ function App() {
       updatedAt: now,
     };
 
-    setData((current) => ({
-      ...current,
-      commonTags: Array.from(new Set([...(current.commonTags || []), ...tags])),
-      sections: current.sections.map((section) => {
-        if (section.id !== draft.sectionId) {
+    const nextData = {
+      ...data,
+      commonTags: Array.from(new Set([...(data.commonTags || []), ...tags])),
+      sections: data.sections.map((section) => {
+        if (section.id !== targetSectionId) {
           return {
             ...section,
             items: section.items.filter((existing) => existing.id !== item.id),
@@ -411,56 +450,65 @@ function App() {
           : [{ ...item, createdAt: now }, ...section.items];
         return { ...section, items: nextItems };
       }),
-    }));
-    setActiveSectionId(draft.sectionId);
+    };
+
+    setData(nextData);
+    setActiveSectionId(targetSectionId);
     setDraft(null);
-    setStatus('已保存到当前页面，记得点右上角“同步到 GitHub”');
+    await syncDataToGitHub(nextData, {
+      startMessage: '正在保存并同步到 GitHub...',
+      successMessage: '保存并同步成功，刷新后也不会丢',
+    });
+    setIsSaving(false);
   };
 
-  const deleteItem = (itemId) => {
+  const deleteItem = async (itemId) => {
     if (!window.confirm('确认删除这个案例？删除后还要点击“同步到 GitHub”才会永久保存。')) return;
-    setData((current) => ({
-      ...current,
-      sections: current.sections.map((section) => ({
+    const nextData = {
+      ...data,
+      sections: data.sections.map((section) => ({
         ...section,
         items: section.items.filter((item) => item.id !== itemId),
       })),
-    }));
+    };
+    setData(nextData);
     setViewingItem(null);
-    setStatus('已从当前页面删除，记得同步到 GitHub');
+    await syncDataToGitHub(nextData, {
+      startMessage: '正在删除并同步到 GitHub...',
+      successMessage: '删除并同步成功',
+    });
   };
 
-  const addSection = () => {
+  const addSection = async () => {
     const title = window.prompt('新分区名称，例如：产品图 / 网站设计 / Banner');
     if (!title) return;
     const section = { id: uid(), title, description: '', items: [] };
-    setData((current) => ({ ...current, sections: [...current.sections, section] }));
+    const nextData = { ...data, sections: [...data.sections, section] };
+    setData(nextData);
     setActiveSectionId(section.id);
+    await syncDataToGitHub(nextData, {
+      startMessage: '正在添加分区并同步到 GitHub...',
+      successMessage: '分区已添加并同步成功',
+    });
   };
 
-  const renameSection = () => {
+  const renameSection = async () => {
     if (!activeSection) return;
     const title = window.prompt('修改分区名称', activeSection.title);
     if (!title) return;
-    setData((current) => ({
-      ...current,
-      sections: current.sections.map((section) => section.id === activeSection.id ? { ...section, title } : section),
-    }));
+    const nextData = {
+      ...data,
+      sections: data.sections.map((section) => section.id === activeSection.id ? { ...section, title } : section),
+    };
+    setData(nextData);
+    await syncDataToGitHub(nextData, {
+      startMessage: '正在重命名分区并同步到 GitHub...',
+      successMessage: '分区已重命名并同步成功',
+    });
   };
 
   const syncToGitHub = async () => {
-    setStatus('正在同步到 GitHub...');
-    const payload = {
-      ...data,
-      lastUpdated: new Date().toISOString(),
-    };
-    const res = await fetch('/api/sync-github', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const json = await res.json();
-    setStatus(json.success ? '同步成功，刷新网页后会读取 GitHub 最新数据' : (json.error || '同步失败'));
+    await syncDataToGitHub(data);
   };
 
   const copyPrompt = async (prompt) => {
@@ -617,6 +665,7 @@ function App() {
             placeholder="管理员密码"
             className="field"
           />
+          {status && <div className="modal-status">{status}</div>}
           <button onClick={login} className="btn-primary w-full mt-4">登录</button>
         </Modal>
       )}
@@ -674,10 +723,11 @@ function App() {
               <p className="modal-subtitle">复制图片、图片链接或提示词后，点 Paste 就能自动放到合适的位置。</p>
             </div>
             <div className="editor-actions">
-              <button onClick={() => pasteFromClipboard({ mode: 'smart', target: uploadTarget })} className="btn-secondary"><Clipboard size={16} /> Paste 智能粘贴</button>
-              <button onClick={saveDraft} className="btn-primary"><Check size={16} /> 保存到页面</button>
+              <button type="button" onClick={() => pasteFromClipboard({ mode: 'smart', target: uploadTarget })} className="btn-secondary" disabled={isSaving}><Clipboard size={16} /> Paste 智能粘贴</button>
+              <button type="button" onClick={saveDraft} className="btn-primary" disabled={isSaving}><Check size={16} /> {isSaving ? '保存中...' : '保存并同步'}</button>
             </div>
           </div>
+          {status && <div className="modal-status">{status}</div>}
 
           <div className="editor-grid">
             <label className="block">

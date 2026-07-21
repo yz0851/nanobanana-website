@@ -687,6 +687,15 @@ textarea.field {
   background: #7fc2d4;
 }
 
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-ghost:disabled,
+.btn-danger:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  transform: none;
+}
+
 .btn-secondary {
   color: #496873;
   background: var(--paper);
@@ -784,6 +793,17 @@ textarea.field {
   margin: 0 42px 16px 0;
   color: var(--text-secondary);
   font-size: 14px;
+}
+
+.modal-status {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  color: #4f737d;
+  background: #f4fbfd;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .detail-layout {
