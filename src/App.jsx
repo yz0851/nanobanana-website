@@ -288,6 +288,12 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!status || draft || isLoginOpen) return undefined;
+    const timer = window.setTimeout(() => setStatus(''), 4200);
+    return () => window.clearTimeout(timer);
+  }, [status, draft, isLoginOpen]);
+
+  useEffect(() => {
     const onPaste = async (event) => {
       if (!draft || !isAdmin) return;
       const files = Array.from(event.clipboardData?.items || [])
