@@ -681,27 +681,19 @@ function App() {
 
       <main className="site-shell page-main">
         <section className="intro-card">
-          <div className="intro-copy">
-            <p className="eyebrow">Prompt Vault · {totalItems} items</p>
-            <h1>收藏喜欢的画面<br />也保存创作它们的方法</h1>
-            <p>整理产品图、网页设计、视觉参考和创作提示词。</p>
-          </div>
+          <p>整理产品图、网页设计、视觉参考和创作提示词。</p>
         </section>
 
         {status && <div className="status-note">{status}</div>}
 
-        <section className="gallery-toolbar">
-          <div className="toolbar-top">
-            <div>
-              <h2>{isAllSections ? '全部收藏' : activeSection?.title}</h2>
-              <p>{isAllSections ? '按时间与灵感自然铺开。' : (activeSection?.description || '这个分区里的收藏。')}</p>
-            </div>
-            <div className="toolbar-admin">
-              {isAdmin && <button onClick={addSection} className="text-action">+ 添加分区</button>}
-              {isAdmin && activeSection && <button onClick={renameSection} className="text-action">重命名当前分区</button>}
-            </div>
+        {isAdmin && (
+          <div className="admin-actions-row">
+            <button onClick={addSection} className="text-action">+ 添加分区</button>
+            {activeSection && <button onClick={renameSection} className="text-action">重命名当前分区</button>}
           </div>
+        )}
 
+        <section className="gallery-toolbar">
           <div className="filter-row">
             <label className="search-field">
               <Search size={17} />
