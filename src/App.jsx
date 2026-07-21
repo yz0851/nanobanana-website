@@ -314,8 +314,10 @@ function App() {
 
   const uploadFiles = async (files, target = uploadTarget) => {
     if (!files.length) return;
-    setStatus(`正在上传 ${files.length} 张图片到 Catbox...`);
+    setStatus(`正在上传 ${files.length} 张图片...`);
     const uploadedUrls = [];
+    const providers = [];
+    const warnings = [];
     try {
       for (const file of files) {
         const image = await compressImage(file);
@@ -330,12 +332,17 @@ function App() {
           return false;
         }
         uploadedUrls.push(json.url);
+        if (json.provider) providers.push(json.provider);
+        if (json.warning) warnings.push(json.warning);
       }
       setDraft((current) => ({
         ...current,
         [target]: [...(current?.[target] || []), ...uploadedUrls],
       }));
-      setStatus(`已上传 ${uploadedUrls.length} 张图片，可以继续编辑或保存并同步`);
+      const providerText = providers.includes('github')
+        ? '（Catbox 不稳定时已自动改存 GitHub）'
+        : '';
+      setStatus(`已上传 ${uploadedUrls.length} 张图片${providerText}，可以继续编辑或保存并同步${warnings[0] ? `。${warnings[0]}` : ''}`);
       return true;
     } catch (error) {
       setStatus(`图片上传失败：${error.message || '请稍后重试'}`);
