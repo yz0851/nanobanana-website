@@ -211,6 +211,24 @@ button {
   gap: 8px;
 }
 
+.sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+  color: #5a7d87;
+  background: rgba(217, 239, 246, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sync-pill svg {
+  animation: spin 1s linear infinite;
+}
+
 .page-main {
   position: relative;
   padding: 24px 0 52px;
@@ -946,6 +964,7 @@ textarea.field {
 }
 
 .image-gallery-fallback,
+.image-gallery-empty,
 .upload-preview-fallback {
   min-height: 180px;
   display: grid;
@@ -956,6 +975,16 @@ textarea.field {
   font-size: 12px;
   font-weight: 700;
   text-align: center;
+}
+
+.image-gallery-empty {
+  min-height: 360px;
+  padding: 28px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  color: #6f8d96;
+  background: linear-gradient(180deg, #fffdf8, #f4fbfd);
+  line-height: 1.7;
 }
 
 .image-gallery-fallback {
@@ -1143,6 +1172,12 @@ textarea.field {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

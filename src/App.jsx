@@ -50,13 +50,16 @@ const EMPTY_DATA = {
 
 const uid = () => `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const IMAGE_URL_REGEX = /https?:\/\/[^\s"'<>]+?\.(?:png|jpe?g|gif|webp|avif|bmp|svg)(?:\?[^\s"'<>]*)?/gi;
+const DATA_CACHE_KEY = 'product_prompt_vault_data_cache_v1';
 
 const extractImageUrls = (text = '') => Array.from(new Set(text.match(IMAGE_URL_REGEX) || []));
-const getDisplayImageSrc = (url = '') => (
-  url.includes('files.catbox.moe')
-    ? `/api/image?url=${encodeURIComponent(url)}`
-    : url
-);
+const getDisplayImageSrc = (url = '', width = 900) => {
+  if (!url || typeof url !== 'string') return '';
+  if (url.startsWith('data:image/')) return url;
+  if (!url.startsWith('http')) return url;
+  if (url.includes('wsrv.nl')) return url;
+  return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=${width}&q=90&output=webp`;
+};
 
 const extensionFromMime = (mime = '') => {
   if (mime.includes('png')) return 'png';
@@ -96,6 +99,25 @@ const normalizeData = (raw) => {
       };
     }),
   };
+};
+
+const readCachedData = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const cached = window.localStorage.getItem(DATA_CACHE_KEY);
+    return cached ? normalizeData(JSON.parse(cached)) : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+const writeCachedData = (nextData) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(DATA_CACHE_KEY, JSON.stringify(nextData));
+  } catch (error) {
+    // localStorage 满了或被浏览器禁用时，不影响主功能
+  }
 };
 
 const emptyDraft = (sectionId = '') => ({
@@ -138,7 +160,7 @@ async function compressImage(file) {
 }
 
 function App() {
-  const [data, setData] = useState(EMPTY_DATA);
+  const [data, setData] = useState(() => readCachedData() || EMPTY_DATA);
   const [activeSectionId, setActiveSectionId] = useState('all');
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState('');
@@ -150,37 +172,65 @@ function App() {
   const [status, setStatus] = useState('');
   const [uploadTarget, setUploadTarget] = useState('images');
   const [isSaving, setIsSaving] = useState(false);
+  const [isDataRefreshing, setIsDataRefreshing] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
+    let cancelled = false;
+    let remoteLoaded = false;
+    const hadCachedData = Boolean(readCachedData());
+
+    const loadStaticSeed = () => (
+      fetch('/data.json')
+        .then((res) => res.json())
+        .then((json) => {
+          if (cancelled || remoteLoaded) return;
+          const normalized = normalizeData(json);
+          setData(normalized);
+          writeCachedData(normalized);
+          setActiveSectionId('all');
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setData(EMPTY_DATA);
+            setActiveSectionId('all');
+          }
+        })
+    );
+
+    if (!hadCachedData) {
+      loadStaticSeed();
+    }
+
+    setIsDataRefreshing(true);
     fetch('/api/data')
       .then((res) => {
         if (!res.ok) throw new Error('api data failed');
         return res.json();
       })
       .then((json) => {
+        if (cancelled) return;
+        remoteLoaded = true;
         const normalized = normalizeData(json);
         setData(normalized);
+        writeCachedData(normalized);
         setActiveSectionId('all');
       })
       .catch(() => {
-        fetch('/data.json')
-          .then((res) => res.json())
-          .then((json) => {
-            const normalized = normalizeData(json);
-            setData(normalized);
-            setActiveSectionId('all');
-          })
-          .catch(() => {
-            setData(EMPTY_DATA);
-            setActiveSectionId('all');
-          });
+        if (!hadCachedData) loadStaticSeed();
+      })
+      .finally(() => {
+        if (!cancelled) setIsDataRefreshing(false);
       });
 
     fetch('/api/auth-status')
       .then((res) => res.json())
       .then((json) => setIsAdmin(Boolean(json.authenticated)))
       .catch(() => setIsAdmin(false));
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -409,6 +459,7 @@ function App() {
         throw new Error(json.details || json.error || '同步失败');
       }
       setData(payload);
+      writeCachedData(payload);
       setStatus(successMessage);
       return true;
     } catch (error) {
@@ -419,6 +470,10 @@ function App() {
 
   const saveDraft = async () => {
     if (isSaving) return;
+    if (!(draft.images || []).length && !(draft.referenceImages || []).length) {
+      const shouldSave = window.confirm('这个案例目前没有图片。继续保存的话，卡片只能显示占位图。要继续保存吗？');
+      if (!shouldSave) return;
+    }
     setIsSaving(true);
     const tags = draft.tagsText
       .split(/[,，]/)
@@ -468,7 +523,7 @@ function App() {
   };
 
   const deleteItem = async (itemId) => {
-    if (!window.confirm('确认删除这个案例？删除后还要点击“同步到 GitHub”才会永久保存。')) return;
+    if (!window.confirm('确认删除这个案例？删除后会自动同步到 GitHub。')) return;
     const nextData = {
       ...data,
       sections: data.sections.map((section) => ({
@@ -549,6 +604,9 @@ function App() {
           </nav>
 
           <div className="header-actions">
+            {isDataRefreshing && (
+              <span className="sync-pill"><Loader2 size={13} /> 同步最新</span>
+            )}
             {isAdmin ? (
               <>
                 <button onClick={openNewDraft} className="btn-primary"><Plus size={16} /> 新增</button>
@@ -679,7 +737,7 @@ function App() {
         <Modal onClose={() => setViewingItem(null)} wide>
           <div className="detail-layout">
             <div className="detail-media">
-              <ImageGallery title="案例图 / 目标图" images={viewingItem.images} primary />
+              <ImageGallery title="案例图 / 目标图" images={viewingItem.images} primary emptyText="这个案例当前没有图片。可以点“编辑”，再用 Paste 图片重新上传。" />
               <ImageGallery title="参考图（可选）" images={viewingItem.referenceImages} compact />
             </div>
 
@@ -810,15 +868,26 @@ function Modal({ children, onClose, wide = false }) {
   );
 }
 
-function ImageGallery({ title, images = [], primary = false, compact = false }) {
-  if (!images.length) return null;
+function ImageGallery({ title, images = [], primary = false, compact = false, emptyText = '' }) {
+  if (!images.length) {
+    if (!emptyText) return null;
+    return (
+      <section className={`image-gallery ${primary ? 'image-gallery-primary' : ''} ${compact ? 'image-gallery-compact' : ''}`}>
+        <h4><Eye size={16} /> {title}</h4>
+        <div className="image-gallery-empty">
+          <ImageIcon size={34} />
+          <span>{emptyText}</span>
+        </div>
+      </section>
+    );
+  }
   return (
     <section className={`image-gallery ${primary ? 'image-gallery-primary' : ''} ${compact ? 'image-gallery-compact' : ''}`}>
       <h4><Eye size={16} /> {title}</h4>
       <div className="image-gallery-grid">
         {images.map((url) => (
           <a key={url} href={url} target="_blank" rel="noreferrer" className="image-gallery-link">
-            <SmartImage src={url} alt="" fallbackClassName="image-gallery-fallback" />
+            <SmartImage src={url} alt="" width={1200} fallbackClassName="image-gallery-fallback" />
           </a>
         ))}
       </div>
@@ -868,8 +937,12 @@ function UploadBox({ title, images, active, onFocus, onUpload, onPaste, onRemove
   );
 }
 
-function SmartImage({ src, alt = '', className = '', fallbackClassName = 'image-fallback' }) {
+function SmartImage({ src, alt = '', className = '', fallbackClassName = 'image-fallback', width = 900 }) {
   const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
   if (!src || failed) {
     return (
       <div className={fallbackClassName}>
@@ -881,10 +954,11 @@ function SmartImage({ src, alt = '', className = '', fallbackClassName = 'image-
 
   return (
     <img
-      src={getDisplayImageSrc(src)}
+      src={getDisplayImageSrc(src, width)}
       alt={alt}
       className={className}
       loading="lazy"
+      decoding="async"
       onError={() => setFailed(true)}
     />
   );

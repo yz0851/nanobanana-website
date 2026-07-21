@@ -15,6 +15,20 @@ export default async function handler(req, res) {
 
   try {
     const { repo, branch, filePath } = getRepoConfig();
+    const rawUrl = `https://raw.githubusercontent.com/${repo}/${branch}/${filePath}?t=${Date.now()}`;
+    const rawResponse = await fetch(rawUrl, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'product-prompt-vault',
+      },
+    });
+
+    if (rawResponse.ok) {
+      const data = await rawResponse.json();
+      res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=120');
+      return res.status(200).json(data);
+    }
+
     const url = `https://api.github.com/repos/${repo}/contents/${filePath}?ref=${encodeURIComponent(branch)}`;
     const headers = {
       'Accept': 'application/vnd.github+json',
@@ -34,7 +48,7 @@ export default async function handler(req, res) {
     const text = Buffer.from(file.content || '', 'base64').toString('utf8');
     const data = JSON.parse(text);
 
-    res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=300');
+    res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=120');
     return res.status(200).json(data);
   } catch (error) {
     console.error('Read data error:', error);
