@@ -554,8 +554,12 @@ textarea.field {
   min-height: 180px;
   display: grid;
   place-items: center;
+  gap: 6px;
   color: var(--sky-blue);
   background: linear-gradient(180deg, #f7fbfc, var(--sky-blue-light));
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .gallery-card-body {
@@ -939,6 +943,29 @@ textarea.field {
   display: block;
   width: 100%;
   height: auto;
+}
+
+.image-gallery-fallback,
+.upload-preview-fallback {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  background: linear-gradient(180deg, #f7fbfc, var(--sky-blue-light));
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.image-gallery-fallback {
+  min-height: 260px;
+}
+
+.upload-preview-fallback {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 0;
 }
 
 .editor-head {

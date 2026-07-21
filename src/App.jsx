@@ -52,6 +52,11 @@ const uid = () => `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const IMAGE_URL_REGEX = /https?:\/\/[^\s"'<>]+?\.(?:png|jpe?g|gif|webp|avif|bmp|svg)(?:\?[^\s"'<>]*)?/gi;
 
 const extractImageUrls = (text = '') => Array.from(new Set(text.match(IMAGE_URL_REGEX) || []));
+const getDisplayImageSrc = (url = '') => (
+  url.includes('files.catbox.moe')
+    ? `/api/image?url=${encodeURIComponent(url)}`
+    : url
+);
 
 const extensionFromMime = (mime = '') => {
   if (mime.includes('png')) return 'png';
@@ -635,7 +640,7 @@ function App() {
                 <button onClick={() => setViewingItem(item)} className="gallery-card-button">
                   <div className="gallery-image-wrap">
                     {item.images?.[0] ? (
-                      <img src={item.images[0]} alt={item.title} className="gallery-card-image" />
+                      <SmartImage src={item.images[0]} alt={item.title} className="gallery-card-image" fallbackClassName="gallery-placeholder" />
                     ) : (
                       <div className="gallery-placeholder"><ImageIcon size={34} /></div>
                     )}
@@ -813,7 +818,7 @@ function ImageGallery({ title, images = [], primary = false, compact = false }) 
       <div className="image-gallery-grid">
         {images.map((url) => (
           <a key={url} href={url} target="_blank" rel="noreferrer" className="image-gallery-link">
-            <img src={url} alt="" />
+            <SmartImage src={url} alt="" fallbackClassName="image-gallery-fallback" />
           </a>
         ))}
       </div>
@@ -853,13 +858,35 @@ function UploadBox({ title, images, active, onFocus, onUpload, onPaste, onRemove
         <div className="upload-preview-grid">
           {images.map((url) => (
             <div key={url} className="upload-preview">
-              <img src={url} alt="" />
+              <SmartImage src={url} alt="" fallbackClassName="upload-preview-fallback" />
               <button onClick={() => onRemove(url)} aria-label="移除图片"><X size={13} /></button>
             </div>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function SmartImage({ src, alt = '', className = '', fallbackClassName = 'image-fallback' }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return (
+      <div className={fallbackClassName}>
+        <ImageIcon size={28} />
+        <span>图片加载失败</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={getDisplayImageSrc(src)}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
   );
 }
 

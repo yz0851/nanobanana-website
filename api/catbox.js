@@ -39,7 +39,32 @@ export default async function handler(req, res) {
     const text = await response.text();
     
     if (text.startsWith('https://')) {
-      return res.status(200).json({ success: true, url: text.trim() });
+      const url = text.trim();
+      try {
+        const verifyResponse = await fetch(url, {
+          headers: {
+            'User-Agent': 'ProductPromptVault/1.0',
+            'Accept': 'image/*,*/*;q=0.8'
+          }
+        });
+        const buffer = Buffer.from(await verifyResponse.arrayBuffer());
+        if (!verifyResponse.ok || buffer.length === 0) {
+          return res.status(502).json({
+            success: false,
+            error: 'Catbox 返回了图片地址，但文件为空或暂时不可读取，请重新上传一次',
+            url
+          });
+        }
+      } catch (verifyError) {
+        return res.status(502).json({
+          success: false,
+          error: 'Catbox 返回了图片地址，但本站暂时无法读取该图片，请重新上传或稍后再试',
+          details: verifyError.message,
+          url
+        });
+      }
+
+      return res.status(200).json({ success: true, url });
     } else {
       return res.status(500).json({ success: false, error: 'Catbox upload failed', details: text });
     }
