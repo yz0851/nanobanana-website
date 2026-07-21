@@ -643,10 +643,7 @@ function App() {
       <header className="site-header">
         <div className="site-shell site-header-inner">
           <button className="brand" onClick={() => setActiveSectionId('all')} aria-label="回到全部收藏">
-            <span className="brand-mark" aria-hidden="true">
-              <span className="brand-sun" />
-              <span className="brand-cloud" />
-            </span>
+            <span className="brand-mark" aria-hidden="true" />
             <span className="brand-text">{data.site.title}</span>
           </button>
 
@@ -685,20 +682,9 @@ function App() {
       <main className="site-shell page-main">
         <section className="intro-card">
           <div className="intro-copy">
-            <p className="eyebrow">Summer archive · {totalItems} items</p>
+            <p className="eyebrow">Prompt Vault · {totalItems} items</p>
             <h1>收藏喜欢的画面<br />也保存创作它们的方法</h1>
             <p>整理产品图、网页设计、视觉参考和创作提示词。</p>
-          </div>
-          <div className="intro-art" aria-hidden="true">
-            <img src="/illustrations/summer-header.webp" alt="" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
-            <div className="css-summer-scene">
-              <span className="scene-sun" />
-              <span className="scene-cloud scene-cloud-a" />
-              <span className="scene-cloud scene-cloud-b" />
-              <span className="scene-hill" />
-              <span className="scene-leaf scene-leaf-a" />
-              <span className="scene-leaf scene-leaf-b" />
-            </div>
           </div>
         </section>
 
@@ -743,12 +729,6 @@ function App() {
 
         {filteredItems.length === 0 ? (
           <section className="empty-state">
-            <img src="/illustrations/summer-empty.webp" alt="" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
-            <div className="empty-fallback" aria-hidden="true">
-              <span className="empty-sun" />
-              <span className="empty-cloud" />
-              <span className="empty-window" />
-            </div>
             <h3>这里还没有收藏</h3>
             <p>遇到喜欢的画面，就把它留在这里吧。</p>
             {isAdmin && <button onClick={openNewDraft} className="btn-primary"><Plus size={16} /> 点击开始收藏</button>}
